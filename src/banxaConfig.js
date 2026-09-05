@@ -15,12 +15,12 @@ export const BANXA_PARTNER_REF = "PASTE_YOUR_BANXA_PARTNER_REF_HERE";
 // Sandbox while testing; switch to false once Banxa approves production.
 export const BANXA_SANDBOX = true;
 
-export function getBanxaCheckoutUrl({ walletAddress }) {
+export function getBanxaCheckoutUrl({ walletAddress, coinType = "ETH" }) {
   const domain = BANXA_SANDBOX ? "banxa-sandbox.com" : "banxa.com";
   const params = new URLSearchParams({
     walletAddress,
-    coinType: "ETH",
-    blockchain: "ETH",
+    coinType,
+    blockchain: coinType,
     fiatType: "USD",
   });
   return `https://${BANXA_PARTNER_REF}.${domain}?${params.toString()}`;
