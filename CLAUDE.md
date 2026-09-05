@@ -22,15 +22,19 @@
   money touches the site — either the copy needs to change or the
   architecture needs per-user multi-chain wallets instead.
 
-## Buy Crypto Flow
-- Supports ETH, BTC, LTC, SOL — via Banxa only (referral link, no SDK, no
-  backend signing, src/banxaConfig.js). MoonPay was removed entirely
-  (dependency, provider, config, and functions/sign-moonpay-url.js) —
-  don't re-add references to it.
+## Buy Crypto Flow (Banxa) — currently disconnected from the UI
+- src/banxaConfig.js (getBanxaCheckoutUrl) is still a real, working
+  integration, but nothing in src/ imports or renders it anymore — the
+  user said to drop the "Buy crypto" entry point in favor of Add Credit
+  (below) since Banxa still needs partner approval to actually work.
+  Don't delete the file (it's ready to re-add once BANXA_PARTNER_REF is
+  filled in), but don't wire it back up unless asked.
+- MoonPay was removed entirely (dependency, provider, config, and
+  functions/sign-moonpay-url.js) — don't re-add references to it.
 - BANXA_PARTNER_REF in src/banxaConfig.js is a placeholder until Banxa
   approves partner access (apply at banxa.com/talk-to-our-team/, not
   self-serve) and issues a partnerRef + sandbox API key via their Partner
-  Dashboard. The buy flow will not actually work until that's filled in.
+  Dashboard.
 - BANXA_SANDBOX flag in the same file switches between banxa-sandbox.com
   and banxa.com — flip it only once Banxa approves production access.
 
@@ -64,29 +68,35 @@
   balance / wallet address.
 
 ## Site Credit (custodial — separate from the self-custodial wallet)
-- IMPORTANT OPEN ISSUE: this is a second, deliberate, custodial funding
-  path alongside Banxa, added because Banxa requires business
-  verification the user didn't have yet. A user pays crypto they already
-  own into Coinstate Capital's own NOWPayments account, and gets an
-  internal USD balance credited in return — Coinstate Capital actually
-  receives and holds this money. This directly contradicts the site's own
-  footer/Auth.jsx copy ("Coinstate Capital does not hold customer funds,
-  crypto, or securities" / "never has access to it"). The user was told
-  this explicitly and chose to ship it anyway with the copy unchanged —
-  this is a known, deliberately-deferred inconsistency, not an oversight.
-  Revisit before real users/real money: either update that copy or drop
-  this feature. Also worth real legal advice before going live — holding
-  and converting customer crypto into internal credit is a different,
-  more regulated business than a referral-only on-ramp.
-- Flow: src/components/CreditInvoiceModal.jsx (amount + currency picker,
-  then a QR/timer/address invoice screen, styled to match a reference
-  screenshot the user provided) → functions/create-payment.js (creates a
-  NOWPayments payment, records a `waiting` row in Supabase `credit_payments`)
-  → functions/nowpayments-webhook.js (the ONLY place a balance is ever
-  incremented — verifies NOWPayments' `x-nowpayments-sig` HMAC-SHA512
-  header before trusting anything, and is idempotent via the `credited`
-  flag) → functions/get-credit-balance.js / payment-status.js (read-only,
-  let the browser poll without ever seeing NOWPayments credentials).
+- This is now the site's PRIMARY funding entry point ("Add funds" in the
+  dashboard sidebar and next to the Site credit balance) — Banxa's "Buy
+  crypto" entry point was removed in favor of this (see Buy Crypto Flow
+  above), because Banxa still needs partner approval and this doesn't.
+- IMPORTANT OPEN ISSUE: this is a deliberate custodial funding path. A
+  user pays crypto they already own into Coinstate Capital's own
+  NOWPayments account, and gets an internal USD balance credited in
+  return — Coinstate Capital actually receives and holds this money. This
+  directly contradicts the site's own footer/Auth.jsx copy ("Coinstate
+  Capital does not hold customer funds, crypto, or securities" / "never
+  has access to it"). The user was told this explicitly and chose to ship
+  it anyway with the copy unchanged — this is a known, deliberately-
+  deferred inconsistency, not an oversight. Revisit before real
+  users/real money: either update that copy or drop this feature. Also
+  worth real legal advice before going live — holding and converting
+  customer crypto into internal credit is a different, more regulated
+  business than a referral-only on-ramp.
+- Flow: src/components/CreditInvoiceModal.jsx (amount + currency picker —
+  preset chips at $20/$50/$100/$250/$500/$1000 plus a free-text custom
+  amount field, and an optional `initialCurrency` prop so a chart's "Buy"
+  button can preselect a coin — then a QR/timer/address invoice screen,
+  styled to match a reference screenshot the user provided) →
+  functions/create-payment.js (creates a NOWPayments payment, records a
+  `waiting` row in Supabase `credit_payments`) → functions/nowpayments-webhook.js
+  (the ONLY place a balance is ever incremented — verifies NOWPayments'
+  `x-nowpayments-sig` HMAC-SHA512 header before trusting anything, and is
+  idempotent via the `credited` flag) → functions/get-credit-balance.js /
+  payment-status.js (read-only, let the browser poll without ever seeing
+  NOWPayments credentials).
 - New Supabase tables (supabase/migrations/20260905214448_add_credit_system.sql):
   `credit_payments` (audit trail + idempotency guard) and `user_credits`
   (the actual balance), plus a Postgres function `increment_credit_balance`

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { SUPPORTED_CURRENCIES } from "../walletAddresses.js";
 
-const PRESET_AMOUNTS = [20, 50, 100, 250];
+const PRESET_AMOUNTS = [20, 50, 100, 250, 500, 1000];
 
 const COIN_LABELS = { ETH: "Ethereum", BTC: "Bitcoin", LTC: "Litecoin", SOL: "Solana" };
 
@@ -19,10 +19,11 @@ function formatCountdown(msRemaining) {
 // Only functions/nowpayments-webhook.js ever actually credits the
 // balance — this modal just displays what create-payment.js returned and
 // polls functions/payment-status.js to know when that happened.
-export default function CreditInvoiceModal({ walletAddress, onClose, onCredited }) {
+export default function CreditInvoiceModal({ walletAddress, initialCurrency, onClose, onCredited }) {
   const [step, setStep] = useState("choose"); // choose | invoice | error
   const [amount, setAmount] = useState(20);
-  const [currency, setCurrency] = useState("eth");
+  const [customAmount, setCustomAmount] = useState(""); // raw text from the custom-amount field
+  const [currency, setCurrency] = useState(initialCurrency || "eth");
   const [submitting, setSubmitting] = useState(false);
   const [invoice, setInvoice] = useState(null); // { paymentId, payAddress, payAmount, payCurrency, expiresAt }
   const [status, setStatus] = useState("waiting");
@@ -112,17 +113,35 @@ export default function CreditInvoiceModal({ walletAddress, onClose, onCredited 
             </div>
 
             <div style={{ fontSize: 12, color: "rgba(237,231,218,0.5)", marginBottom: 8 }}>Amount</div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
               {PRESET_AMOUNTS.map((a) => (
                 <button
                   key={a}
-                  onClick={() => setAmount(a)}
-                  className={`credit-chip ${amount === a ? "active" : ""}`}
+                  onClick={() => {
+                    setAmount(a);
+                    setCustomAmount("");
+                  }}
+                  className={`credit-chip ${customAmount === "" && amount === a ? "active" : ""}`}
                 >
                   ${a}
                 </button>
               ))}
             </div>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              placeholder="Or enter a custom amount"
+              value={customAmount}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setCustomAmount(raw);
+                const parsed = parseFloat(raw);
+                if (Number.isFinite(parsed) && parsed > 0) setAmount(parsed);
+              }}
+              className="credit-custom-amount num"
+              style={{ marginBottom: 20 }}
+            />
 
             <div style={{ fontSize: 12, color: "rgba(237,231,218,0.5)", marginBottom: 8 }}>Pay with</div>
             <div style={{ display: "flex", gap: 8, marginBottom: 28, flexWrap: "wrap" }}>
@@ -137,8 +156,13 @@ export default function CreditInvoiceModal({ walletAddress, onClose, onCredited 
               ))}
             </div>
 
-            <button className="btn-primary" style={{ width: "100%" }} onClick={createInvoice} disabled={submitting}>
-              {submitting ? "Creating invoice…" : `Continue with $${amount}`}
+            <button
+              className="btn-primary"
+              style={{ width: "100%" }}
+              onClick={createInvoice}
+              disabled={submitting || !(amount > 0)}
+            >
+              {submitting ? "Creating invoice…" : `Continue with $${amount.toFixed(2)}`}
             </button>
           </>
         )}

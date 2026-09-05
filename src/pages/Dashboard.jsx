@@ -2,8 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { createPublicClient, http, formatEther } from "viem";
 import { mainnet } from "viem/chains";
-import { getBanxaCheckoutUrl } from "../banxaConfig.js";
-import { WALLET_ADDRESSES, SUPPORTED_CURRENCIES } from "../walletAddresses.js";
+import { SUPPORTED_CURRENCIES } from "../walletAddresses.js";
 import { useLivePrices } from "../hooks/useLivePrices.js";
 import PriceChart from "../components/PriceChart.jsx";
 import Sparkline from "../components/Sparkline.jsx";
@@ -21,8 +20,6 @@ const COINGECKO_IDS = { ETH: "ethereum", BTC: "bitcoin", LTC: "litecoin", SOL: "
 export default function Dashboard() {
   const { user, logout } = usePrivy();
   const { wallets } = useWallets();
-  const [buyOpen, setBuyOpen] = useState(false);
-  const [buyCurrency, setBuyCurrency] = useState("eth");
   const [ethBalance, setEthBalance] = useState(null); // in ETH, as a number
   const [ethPriceUsd, setEthPriceUsd] = useState(null);
   const [balanceLoading, setBalanceLoading] = useState(true);
@@ -35,6 +32,7 @@ export default function Dashboard() {
   const [tab, setTab] = useState("portfolio");
   const [balanceDelta, setBalanceDelta] = useState(null); // { amount, direction } — a brief "+$0.03" flash
   const [creditOpen, setCreditOpen] = useState(false);
+  const [creditCurrency, setCreditCurrency] = useState("eth"); // which coin is preselected when the modal opens
   const [creditBalance, setCreditBalance] = useState(0); // custodial site-credit balance, NOT on-chain funds
   const prevDisplayedValue = useRef(null);
   const deltaTimeout = useRef(null);
@@ -176,21 +174,12 @@ export default function Dashboard() {
 
   useEffect(() => () => clearTimeout(deltaTimeout.current), []);
 
-  function openBanxa() {
-    const destination = WALLET_ADDRESSES[buyCurrency];
-    if (!destination) return;
-    const coinType = buyCurrency.toUpperCase();
-    const url = getBanxaCheckoutUrl({ walletAddress: destination, coinType });
-    window.open(url, "_blank", "noopener,noreferrer");
-    setBuyOpen(false);
-  }
-
-  // Used by a chart card's "Buy" button on the Markets tab — preselects
-  // that coin and opens the same currency-choice modal as the sidebar's
-  // "Buy crypto" button.
-  function openBuyFor(symbol) {
-    setBuyCurrency(symbol.toLowerCase());
-    setBuyOpen(true);
+  // Opens the Add funds modal, optionally preselecting a currency — used
+  // by the sidebar/balance-card buttons (default) and by a chart card's
+  // "Buy" button on the Markets tab (preselects that coin).
+  function openAddFunds(symbol) {
+    setCreditCurrency(symbol ? symbol.toLowerCase() : "eth");
+    setCreditOpen(true);
   }
 
   return (
@@ -205,8 +194,7 @@ export default function Dashboard() {
             <button className={tab === "markets" ? "active" : ""} onClick={() => setTab("markets")}>
               ↗ Markets
             </button>
-            <button onClick={() => setBuyOpen(true)}>＋ Buy crypto</button>
-            <button onClick={() => setCreditOpen(true)}>◇ Add credit</button>
+            <button onClick={() => openAddFunds()}>＋ Add funds</button>
             <button disabled title="Coming soon">↗ Invest in stocks</button>
             <button disabled title="Coming soon">⚙ Settings</button>
           </nav>
@@ -231,7 +219,7 @@ export default function Dashboard() {
           <div className="content">
             <div className="markets-grid">
               {SUPPORTED_CURRENCIES.map((c) => (
-                <PriceChart key={c.symbol} symbol={c.symbol} onBuy={openBuyFor} />
+                <PriceChart key={c.symbol} symbol={c.symbol} onBuy={openAddFunds} />
               ))}
             </div>
           </div>
@@ -263,9 +251,6 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="balance-actions">
-                <button className="btn-secondary" onClick={() => setBuyOpen(true)}>
-                  Buy crypto
-                </button>
                 <button className="btn-primary" disabled>Invest in stocks</button>
               </div>
             </div>
@@ -275,7 +260,7 @@ export default function Dashboard() {
                 <div className="credit-balance-label">Site credit</div>
                 <div className="credit-balance-amount num">${creditBalance.toFixed(2)}</div>
               </div>
-              <button className="btn-secondary" onClick={() => setCreditOpen(true)}>Add funds</button>
+              <button className="btn-secondary" onClick={() => openAddFunds()}>Add funds</button>
             </div>
 
             <div className="panel">
@@ -340,7 +325,7 @@ export default function Dashboard() {
                     </tbody>
                   </table>
                 ) : (
-                  <div className="empty-state">No holdings yet — buy crypto to see it appear here.</div>
+                  <div className="empty-state">No holdings yet — add funds to see it appear here.</div>
                 )
               ) : ethBalance !== null && ethBalance > 0 ? (
                 <table>
@@ -378,7 +363,7 @@ export default function Dashboard() {
                 </table>
               ) : (
                 <div className="empty-state">
-                  {balanceLoading ? "Checking your balance…" : "No holdings yet — buy crypto to see it appear here."}
+                  {balanceLoading ? "Checking your balance…" : "No holdings yet — add funds to see it appear here."}
                 </div>
               )}
             </div>
@@ -386,79 +371,10 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Buy crypto modal */}
-      {buyOpen && (
-        <div
-          onClick={() => setBuyOpen(false)}
-          style={{
-            position: "fixed", inset: 0, background: "rgba(6,12,11,0.7)",
-            backdropFilter: "blur(4px)", display: "flex", alignItems: "center",
-            justifyContent: "center", zIndex: 100, padding: 20,
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: "var(--ink-2)", border: "1px solid var(--line)",
-              borderRadius: 6, padding: 36, maxWidth: 440, width: "100%",
-            }}
-          >
-            <h2 className="serif" style={{ fontSize: 22, marginBottom: 8 }}>Buy crypto</h2>
-            <div style={{ fontSize: 14, color: "rgba(237,231,218,0.6)", marginBottom: 20 }}>
-              Choose a currency, then continue to Banxa to fund your wallet.
-            </div>
-
-            <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
-              {SUPPORTED_CURRENCIES.map((c) => (
-                <button
-                  key={c.code}
-                  onClick={() => setBuyCurrency(c.code)}
-                  style={{
-                    padding: "8px 14px",
-                    borderRadius: 20,
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    fontFamily: "inherit",
-                    border: buyCurrency === c.code ? "1px solid var(--brass)" : "1px solid var(--line)",
-                    background: buyCurrency === c.code ? "rgba(176,138,78,0.14)" : "transparent",
-                    color: buyCurrency === c.code ? "var(--brass-bright)" : "var(--paper)",
-                  }}
-                >
-                  {c.symbol}
-                </button>
-              ))}
-            </div>
-
-            <button
-              onClick={openBanxa}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                width: "100%", background: "var(--ink)", border: "1px solid var(--line)",
-                borderRadius: 4, padding: "18px 20px", cursor: "pointer", color: "var(--paper)",
-                marginBottom: 12, fontFamily: "inherit",
-              }}
-            >
-              <div style={{ textAlign: "left" }}>
-                <div className="serif" style={{ fontSize: 16 }}>Continue to Banxa</div>
-                <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)", marginTop: 3 }}>
-                  Bank transfer &amp; local payment methods
-                </div>
-              </div>
-              <span style={{ color: "var(--brass-bright)", fontSize: 18 }}>↗</span>
-            </button>
-
-            <div style={{ fontSize: 12, color: "rgba(237,231,218,0.45)", marginTop: 20, lineHeight: 1.6 }}>
-              Coinstate Capital never receives or holds your payment details or funds.
-              Purchased crypto is delivered directly to your self-custody wallet.
-            </div>
-          </div>
-        </div>
-      )}
-
       {creditOpen && (
         <CreditInvoiceModal
           walletAddress={walletAddress}
+          initialCurrency={creditCurrency}
           onClose={() => setCreditOpen(false)}
           onCredited={refreshCreditBalance}
         />
