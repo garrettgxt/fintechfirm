@@ -37,8 +37,7 @@ export async function onRequest(context) {
   }
 
   try {
-    const queryString = targetUrl.split("?")[1] || "";
-    const signature = await signWithHmacSha256(secretKey, `?${queryString}`);
+    const signature = await signWithHmacSha256(secretKey, new URL(targetUrl).search);
 
     return new Response(JSON.stringify({ signature }), {
       status: 200,
