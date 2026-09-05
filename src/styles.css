@@ -78,7 +78,7 @@ button:disabled{ opacity:0.55; cursor:not-allowed; }
 @media (max-width:640px){ .content{ padding:24px 20px; } .topbar{ padding:18px 20px; } }
 
 .balance-card{ background:var(--ink-2); border:1px solid var(--line); border-radius:6px; padding:36px; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:24px; margin-bottom:32px; position:relative; overflow:hidden; }
-.balance-card::before{ content:""; position:absolute; top:-80px; right:-80px; width:220px; height:220px; border:1px solid var(--brass); border-radius:50%; opacity:0.15; }
+
 .balance-label{ font-size:13px; color:rgba(237,231,218,0.55); margin-bottom:10px; }
 .balance-amount{ font-family:'Fraunces',serif; font-size:40px; font-weight:500; }
 .balance-actions{ display:flex; gap:12px; position:relative; z-index:1; }
