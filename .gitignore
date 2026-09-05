@@ -14,6 +14,10 @@ dist-ssr
 
 # Wrangler local cache/state
 .wrangler
+.dev.vars
+
+# Supabase CLI local cache/state
+supabase/.temp
 
 # Editor directories and files
 .vscode/*

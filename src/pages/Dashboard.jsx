@@ -7,6 +7,7 @@ import { WALLET_ADDRESSES, SUPPORTED_CURRENCIES } from "../walletAddresses.js";
 import { useLivePrices } from "../hooks/useLivePrices.js";
 import PriceChart from "../components/PriceChart.jsx";
 import Sparkline from "../components/Sparkline.jsx";
+import CreditInvoiceModal from "../components/CreditInvoiceModal.jsx";
 
 const publicClient = createPublicClient({
   chain: mainnet,
@@ -33,6 +34,8 @@ export default function Dashboard() {
   const [demoQuantity, setDemoQuantity] = useState(null); // coin quantity, frozen once at load so it behaves like a real holding
   const [tab, setTab] = useState("portfolio");
   const [balanceDelta, setBalanceDelta] = useState(null); // { amount, direction } — a brief "+$0.03" flash
+  const [creditOpen, setCreditOpen] = useState(false);
+  const [creditBalance, setCreditBalance] = useState(0); // custodial site-credit balance, NOT on-chain funds
   const prevDisplayedValue = useRef(null);
   const deltaTimeout = useRef(null);
   const livePrices = useLivePrices();
@@ -120,6 +123,20 @@ export default function Dashboard() {
       .catch((err) => console.error("Demo mode check failed:", err));
   }, [walletAddress, email]);
 
+  // Site-credit balance (custodial — see functions/nowpayments-webhook.js).
+  // Separate from the wallet balance above on purpose: one is the user's
+  // own on-chain holdings, the other is money Coinstate Capital is holding
+  // on their behalf, and conflating the two would be misleading.
+  function refreshCreditBalance() {
+    if (!walletAddress) return;
+    fetch(`/get-credit-balance?wallet=${encodeURIComponent(walletAddress)}`)
+      .then((res) => res.json())
+      .then((data) => setCreditBalance(data.balanceUsd ?? 0))
+      .catch((err) => console.error("Failed to fetch credit balance:", err));
+  }
+
+  useEffect(refreshCreditBalance, [walletAddress]);
+
   // Freeze the demo holding's coin quantity the first time we can compute
   // it, so it behaves like a real holding from then on: the quantity of
   // coins stays fixed, and its dollar value moves with the live price —
@@ -189,6 +206,7 @@ export default function Dashboard() {
               ↗ Markets
             </button>
             <button onClick={() => setBuyOpen(true)}>＋ Buy crypto</button>
+            <button onClick={() => setCreditOpen(true)}>◇ Add credit</button>
             <button disabled title="Coming soon">↗ Invest in stocks</button>
             <button disabled title="Coming soon">⚙ Settings</button>
           </nav>
@@ -250,6 +268,14 @@ export default function Dashboard() {
                 </button>
                 <button className="btn-primary" disabled>Invest in stocks</button>
               </div>
+            </div>
+
+            <div className="credit-balance-card">
+              <div>
+                <div className="credit-balance-label">Site credit</div>
+                <div className="credit-balance-amount num">${creditBalance.toFixed(2)}</div>
+              </div>
+              <button className="btn-secondary" onClick={() => setCreditOpen(true)}>Add funds</button>
             </div>
 
             <div className="panel">
@@ -428,6 +454,14 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {creditOpen && (
+        <CreditInvoiceModal
+          walletAddress={walletAddress}
+          onClose={() => setCreditOpen(false)}
+          onCredited={refreshCreditBalance}
+        />
       )}
     </div>
   );

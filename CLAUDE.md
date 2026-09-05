@@ -63,13 +63,53 @@
   table show the demo asset/quantity instead of the real on-chain ETH
   balance / wallet address.
 
+## Site Credit (custodial — separate from the self-custodial wallet)
+- IMPORTANT OPEN ISSUE: this is a second, deliberate, custodial funding
+  path alongside Banxa, added because Banxa requires business
+  verification the user didn't have yet. A user pays crypto they already
+  own into Coinstate Capital's own NOWPayments account, and gets an
+  internal USD balance credited in return — Coinstate Capital actually
+  receives and holds this money. This directly contradicts the site's own
+  footer/Auth.jsx copy ("Coinstate Capital does not hold customer funds,
+  crypto, or securities" / "never has access to it"). The user was told
+  this explicitly and chose to ship it anyway with the copy unchanged —
+  this is a known, deliberately-deferred inconsistency, not an oversight.
+  Revisit before real users/real money: either update that copy or drop
+  this feature. Also worth real legal advice before going live — holding
+  and converting customer crypto into internal credit is a different,
+  more regulated business than a referral-only on-ramp.
+- Flow: src/components/CreditInvoiceModal.jsx (amount + currency picker,
+  then a QR/timer/address invoice screen, styled to match a reference
+  screenshot the user provided) → functions/create-payment.js (creates a
+  NOWPayments payment, records a `waiting` row in Supabase `credit_payments`)
+  → functions/nowpayments-webhook.js (the ONLY place a balance is ever
+  incremented — verifies NOWPayments' `x-nowpayments-sig` HMAC-SHA512
+  header before trusting anything, and is idempotent via the `credited`
+  flag) → functions/get-credit-balance.js / payment-status.js (read-only,
+  let the browser poll without ever seeing NOWPayments credentials).
+- New Supabase tables (supabase/migrations/20260905214448_add_credit_system.sql):
+  `credit_payments` (audit trail + idempotency guard) and `user_credits`
+  (the actual balance), plus a Postgres function `increment_credit_balance`
+  for atomic increments.
+- New Cloudflare env vars needed: NOWPAYMENTS_API_KEY, NOWPAYMENTS_IPN_SECRET
+  (from the user's own NOWPayments dashboard — not set yet as of this
+  writing, so the flow is built but not yet live).
+- The "Site credit" balance is intentionally displayed as a separate card
+  from "Total portfolio value" on the dashboard — don't merge them, since
+  one is real on-chain holdings and the other is this custodial balance.
+
 ## Supabase
 - Actively used, not optional — table wallet_overrides (wallet_address,
   email, demo_mode, demo_balance_usd, demo_asset, demo_asset_amount,
-  updated_at) backs the entire Demo Mode feature above.
+  updated_at) backs the Demo Mode feature above; credit_payments and
+  user_credits back Site Credit above.
 - Accessed server-side only via SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
   (Cloudflare env vars) in functions/admin-list.js, admin-update.js,
-  get-override.js, register-wallet.js.
+  get-override.js, register-wallet.js, create-payment.js,
+  nowpayments-webhook.js, get-credit-balance.js, payment-status.js.
+- This repo is linked to the Supabase project (ref lehosxgqtcuwmqrwdgmu) —
+  use `supabase migration new <name>` + `supabase db push` for schema
+  changes, not one-off manual SQL.
 
 ## Tooling Available
 - wrangler (Cloudflare) and supabase CLIs are installed and authenticated
