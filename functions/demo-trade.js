@@ -39,7 +39,10 @@ export async function onRequest(context) {
     let price;
     if (assetType === "crypto") {
       const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${encodeURIComponent(symbol)}USDT`);
-      if (!res.ok) return new Response(JSON.stringify({ error: "Failed to fetch crypto price" }), { status: 502 });
+      if (!res.ok) {
+        const errText = await res.text();
+        return new Response(JSON.stringify({ error: `Failed to fetch crypto price: HTTP ${res.status} ${errText}` }), { status: 502 });
+      }
       const data = await res.json();
       price = parseFloat(data.price);
     } else {
