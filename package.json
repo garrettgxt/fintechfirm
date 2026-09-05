@@ -10,7 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@moonpay/moonpay-react": "^1.10.8",
     "@privy-io/react-auth": "^3.40.0",
     "lightweight-charts": "^5.2.1",
     "react": "^19.2.8",

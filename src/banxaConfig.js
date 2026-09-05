@@ -1,13 +1,14 @@
 // Coinstate Capital — Banxa configuration
 //
 // Banxa's "Referral" integration needs no backend and no signing — just a
-// URL with your parameters. Much simpler than MoonPay's setup.
+// URL with your parameters.
 //
-// 1. Sign up / talk to Banxa about getting partner access:
-//    https://banxa.com (or your existing Banxa contact if you have one)
-// 2. Ask specifically for your "partnerRef" (subdomain) and sandbox access —
-//    their docs suggest an account manager may need to enable this, so it
-//    may not be instant like MoonPay's test key.
+// 1. Apply for Banxa partner/API access: https://banxa.com/talk-to-our-team/
+//    (partner access is not self-serve — Banxa reviews and approves first)
+// 2. Once approved, get your "partnerRef" (subdomain) and sandbox API key
+//    from the Banxa Partner Dashboard. Per Banxa's docs, sandbox access is
+//    typically available within minutes of approval; production access is
+//    a separate, later approval.
 // 3. Paste your partnerRef below once you have it.
 
 export const BANXA_PARTNER_REF = "PASTE_YOUR_BANXA_PARTNER_REF_HERE";

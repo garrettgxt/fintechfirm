@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { MoonPayBuyWidget } from "@moonpay/moonpay-react";
 import { createPublicClient, http, formatEther } from "viem";
 import { mainnet } from "viem/chains";
 import { getBanxaCheckoutUrl } from "../banxaConfig.js";
@@ -23,7 +22,6 @@ export default function Dashboard() {
   const { wallets } = useWallets();
   const [buyOpen, setBuyOpen] = useState(false);
   const [buyCurrency, setBuyCurrency] = useState("eth");
-  const [moonpayOpen, setMoonpayOpen] = useState(false);
   const [ethBalance, setEthBalance] = useState(null); // in ETH, as a number
   const [ethPriceUsd, setEthPriceUsd] = useState(null);
   const [balanceLoading, setBalanceLoading] = useState(true);
@@ -170,28 +168,12 @@ export default function Dashboard() {
     setBuyOpen(false);
   }
 
-  function openMoonpay() {
-    setMoonpayOpen(true);
-    setBuyOpen(false);
-  }
-
   // Used by a chart card's "Buy" button on the Markets tab — preselects
-  // that coin and opens the same provider-choice modal as the sidebar's
+  // that coin and opens the same currency-choice modal as the sidebar's
   // "Buy crypto" button.
   function openBuyFor(symbol) {
     setBuyCurrency(symbol.toLowerCase());
     setBuyOpen(true);
-  }
-
-  async function signMoonPayUrl(url) {
-    // Cloudflare Pages Functions route: /sign-moonpay-url
-    const response = await fetch(`/sign-moonpay-url?url=${encodeURIComponent(url)}`);
-    const data = await response.json();
-    if (!response.ok) {
-      console.error("MoonPay URL signing failed:", data.error);
-      return "";
-    }
-    return data.signature;
   }
 
   return (
@@ -378,7 +360,7 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Provider choice modal */}
+      {/* Buy crypto modal */}
       {buyOpen && (
         <div
           onClick={() => setBuyOpen(false)}
@@ -397,7 +379,7 @@ export default function Dashboard() {
           >
             <h2 className="serif" style={{ fontSize: 22, marginBottom: 8 }}>Buy crypto</h2>
             <div style={{ fontSize: 14, color: "rgba(237,231,218,0.6)", marginBottom: 20 }}>
-              Choose a currency, then a payment partner to fund your wallet.
+              Choose a currency, then continue to Banxa to fund your wallet.
             </div>
 
             <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
@@ -423,24 +405,6 @@ export default function Dashboard() {
             </div>
 
             <button
-              onClick={openMoonpay}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                width: "100%", background: "var(--ink)", border: "1px solid var(--line)",
-                borderRadius: 4, padding: "18px 20px", cursor: "pointer", color: "var(--paper)",
-                marginBottom: 12, fontFamily: "inherit",
-              }}
-            >
-              <div style={{ textAlign: "left" }}>
-                <div className="serif" style={{ fontSize: 16 }}>MoonPay</div>
-                <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)", marginTop: 3 }}>
-                  Card, bank transfer &amp; Apple Pay
-                </div>
-              </div>
-              <span style={{ color: "var(--brass-bright)", fontSize: 18 }}>↗</span>
-            </button>
-
-            <button
               onClick={openBanxa}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -450,7 +414,7 @@ export default function Dashboard() {
               }}
             >
               <div style={{ textAlign: "left" }}>
-                <div className="serif" style={{ fontSize: 16 }}>Banxa</div>
+                <div className="serif" style={{ fontSize: 16 }}>Continue to Banxa</div>
                 <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)", marginTop: 3 }}>
                   Bank transfer &amp; local payment methods
                 </div>
@@ -465,22 +429,6 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-
-      <MoonPayBuyWidget
-        variant="overlay"
-        visible={moonpayOpen}
-        // Passing all 4 addresses (instead of a single walletAddress) means
-        // MoonPay only shows currencies we actually have an address for —
-        // nothing else is even selectable. currencyCode (not
-        // defaultCurrencyCode) locks the pick to whichever one was chosen
-        // in the modal above, so it can't be changed inside MoonPay's own
-        // UI once the widget is open. This closes the mismatch risk that
-        // used to exist here.
-        walletAddresses={JSON.stringify(WALLET_ADDRESSES)}
-        currencyCode={buyCurrency}
-        onUrlSignatureRequested={signMoonPayUrl}
-        onClose={() => setMoonpayOpen(false)}
-      />
     </div>
   );
 }

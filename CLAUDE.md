@@ -23,15 +23,32 @@
   architecture needs per-user multi-chain wallets instead.
 
 ## Buy Crypto Flow
-- Supports ETH, BTC, LTC, SOL — via MoonPay widget (@moonpay/moonpay-react)
-  and Banxa (referral link, no SDK, src/banxaConfig.js).
-- MoonPay widget is locked to exactly these 4 currencies using the
-  `walletAddresses` prop (map of all 4 addresses) + `currencyCode` (not
-  `defaultCurrencyCode`) so the buyer can't switch to an unsupported
-  currency inside MoonPay's own UI. Still worth a real sandbox test per
-  currency to confirm this behaves as documented.
-- functions/sign-moonpay-url.js HMAC-signs the widget URL server-side
-  using MOONPAY_SECRET_KEY (Cloudflare env var, never in code).
+- Supports ETH, BTC, LTC, SOL — via Banxa only (referral link, no SDK, no
+  backend signing, src/banxaConfig.js). MoonPay was removed entirely
+  (dependency, provider, config, and functions/sign-moonpay-url.js) —
+  don't re-add references to it.
+- BANXA_PARTNER_REF in src/banxaConfig.js is a placeholder until Banxa
+  approves partner access (apply at banxa.com/talk-to-our-team/, not
+  self-serve) and issues a partnerRef + sandbox API key via their Partner
+  Dashboard. The buy flow will not actually work until that's filled in.
+- BANXA_SANDBOX flag in the same file switches between banxa-sandbox.com
+  and banxa.com — flip it only once Banxa approves production access.
+
+## Live Market Data
+- src/hooks/useLivePrices.js: a single shared Coinbase Exchange WebSocket
+  (public, no key) feeds live BTC/ETH/LTC/SOL ticks to every consumer
+  (ticker strip, charts, dashboard balance), falling back to polling
+  CoinGecko's simple/price if the socket drops.
+- src/components/PriceChart.jsx: a lightweight-charts area chart per coin,
+  seeded with real history from Binance's public klines endpoint (NOT
+  CoinGecko's market_chart endpoint — its anonymous rate limit is low
+  enough that a handful of simultaneous chart loads exhausts it; confirmed
+  via a live 429 during testing). Used on both the homepage and the
+  dashboard's Markets tab.
+- The dashboard's portfolio balance and holdings row tick live off this
+  feed (not just the 30s on-chain balance poll), including a demo
+  holding's dollar value floating with the real live price once its coin
+  quantity is frozen — see the comment in Dashboard.jsx.
 
 ## Demo Mode
 - Admin panel at /admin (password-gated via ADMIN_PASSWORD env var, not

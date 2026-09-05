@@ -3,7 +3,7 @@
 // DEV/TEST ONLY. These are NOT per-user Privy embedded wallets — every
 // purchase made on the site currently lands in ONE of these four fixed
 // addresses, shared across all buyers, for manual testing of the
-// MoonPay/Banxa buy flows for each currency.
+// Banxa buy flow for each currency.
 //
 // This is fine for you + a friend testing the flow. It is NOT compatible
 // with the site's current copy ("Coinstate Capital never has access to

@@ -1,10 +1,12 @@
 # Coinstate Capital — React app setup
 
 Privy handles login (email, Google, Apple) AND creates each user's
-self-custodial wallet automatically. MoonPay is wired to buy crypto straight
-into that wallet. Supabase backs the admin Demo Mode feature (overriding a
-wallet's displayed balance). The site is deployed on **Cloudflare Pages**,
-with Cloudflare Pages Functions (the `functions/` folder) providing the
+self-custodial wallet automatically. Banxa is wired up to buy crypto
+straight into that wallet. Supabase backs the admin Demo Mode feature
+(overriding a wallet's displayed balance). Live prices and charts stream
+from Coinbase's public WebSocket feed and Binance's public klines API (no
+keys needed for either). The site is deployed on **Cloudflare Pages**, with
+Cloudflare Pages Functions (the `functions/` folder) providing the
 server-side pieces.
 
 ## 1. Install dependencies
@@ -13,11 +15,19 @@ Open a terminal in this folder and run:
 
     npm install
 
-## 2. Fill in your MoonPay test key
+## 2. Get Banxa partner access
 
-Open `src/moonpayConfig.js` and replace the placeholder with your real
-MoonPay **Test Publishable Key** (starts with `pk_test_`) from
-dashboard.moonpay.com → Developers → API Keys.
+Banxa's referral integration isn't self-serve — you have to apply and get
+approved before you get credentials:
+
+1. Apply at [banxa.com/talk-to-our-team](https://banxa.com/talk-to-our-team/)
+   for partner/API access.
+2. Once approved, get your `partnerRef` (a subdomain) and sandbox API key
+   from Banxa's Partner Dashboard. Per their docs, sandbox access is
+   typically available within minutes of approval.
+3. Open `src/banxaConfig.js` and replace `BANXA_PARTNER_REF` with the real
+   value. Leave `BANXA_SANDBOX = true` until Banxa approves you for
+   production (a separate, later approval).
 
 Your Privy App ID is already filled in (`src/privyConfig.js`) — nothing to
 change there.
@@ -26,11 +36,13 @@ change there.
 
     npm run dev
 
-Open the URL it gives you (usually http://localhost:5173). Note: the "Buy
-crypto" button, wallet registration, and Demo Mode lookups will show errors
-locally, because those all depend on the `functions/` folder, which only
-runs once deployed to Cloudflare Pages — that's expected, not a bug. (If you
-want to test functions locally, use `wrangler pages dev -- npm run dev`.)
+Open the URL it gives you (usually http://localhost:5173). Note: wallet
+registration and Demo Mode lookups will show errors locally, because those
+depend on the `functions/` folder, which only runs once deployed to
+Cloudflare Pages — that's expected, not a bug. (If you want to test
+functions locally, use `wrangler pages dev -- npm run dev`.) Live prices and
+charts work locally too, since they call public third-party APIs directly
+from the browser.
 
 ## 4. Deploy to Cloudflare Pages
 
@@ -52,13 +64,12 @@ Production and Preview):
 
 | Variable | Used by | Notes |
 |---|---|---|
-| `MOONPAY_SECRET_KEY` | `functions/sign-moonpay-url.js` | MoonPay **Test Secret Key** (`sk_test_...`) from Developers → API Keys. Never put this in any file. |
 | `SUPABASE_URL` | `functions/get-override.js`, `register-wallet.js`, `admin-list.js`, `admin-update.js` | e.g. `https://your-project.supabase.co` |
 | `SUPABASE_SERVICE_ROLE_KEY` | same as above | From Supabase Project Settings → API → `service_role` key. This bypasses row-level security — server-side only, never in `src/` or the browser. |
 | `ADMIN_PASSWORD` | `functions/admin-list.js`, `admin-update.js` | Password gating the `/admin` panel (sent as the `x-admin-password` header). |
 
-Also under Settings → Runtime → Compatibility flags, add `nodejs_compat`
-(required by `sign-moonpay-url.js`'s use of Node's `crypto` module).
+Banxa's referral integration needs no server-side secret — `BANXA_PARTNER_REF`
+lives in `src/banxaConfig.js` since it's just a subdomain, not a private key.
 
 Redeploy after adding/changing any of these (Pages → Deployments → retry
 latest, or just push a commit).
@@ -93,23 +104,24 @@ allowed domains.
 3. You'll land on `/dashboard` — a wallet address should appear within a
    few seconds (Privy creating it automatically), and the wallet gets
    registered into `wallet_overrides` via `register-wallet.js`
-4. Click "Buy crypto" — MoonPay's sandbox widget should open, pre-filled
-   with your wallet address
-5. Complete a test purchase using MoonPay's sandbox test card details (see
-   their sandbox docs) — the crypto is testnet-only in sandbox mode, so
-   nothing costs real money
+4. Click "Buy crypto", choose a currency, then "Continue to Banxa" —
+   Banxa's sandbox checkout should open in a new tab, pre-filled with your
+   wallet address
+5. Complete a test purchase using Banxa's sandbox test flow (see their
+   sandbox docs) — nothing costs real money while `BANXA_SANDBOX = true`
 6. Visit `/admin`, enter the `ADMIN_PASSWORD`, and confirm you can see and
    toggle Demo Mode for a registered wallet
 
 ## What's real vs. what's next
 
-**Real now:** login, wallet creation, MoonPay sandbox purchases landing on
-a real (testnet) wallet address, admin Demo Mode overrides via Supabase.
+**Real now:** login, wallet creation, live streaming prices and charts,
+Banxa sandbox purchases (once `BANXA_PARTNER_REF` is filled in) landing on
+a real wallet address, admin Demo Mode overrides via Supabase.
 
 **Not built yet:**
 - Reading the wallet's actual on-chain balance to show in the holdings
   table (currently shows a static "$0.00" / empty state, unless Demo Mode
   is on for that wallet)
 - Stock investing (Alpaca integration)
-- Production MoonPay keys (requires their KYB approval — separate from
+- Production Banxa access (requires their approval — separate from
   anything here)
