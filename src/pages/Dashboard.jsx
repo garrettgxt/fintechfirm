@@ -147,7 +147,7 @@ export default function Dashboard() {
                 Total portfolio value
                 {demoMode && (
                   <span style={{ marginLeft: 10, fontSize: 11, color: "var(--brass-bright)", border: "1px solid var(--brass)", borderRadius: 20, padding: "2px 8px" }}>
-                    
+                    Total portfolio value
                   </span>
                 )}
               </div>
