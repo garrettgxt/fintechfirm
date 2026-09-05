@@ -174,7 +174,6 @@ export default function Dashboard() {
               ↗ Markets
             </button>
             <button onClick={() => openAddFunds()}>＋ Add funds</button>
-            <button disabled title="Coming soon">↗ Invest in stocks (real money)</button>
             <button disabled title="Coming soon">⚙ Settings</button>
           </nav>
         </div>
@@ -227,12 +226,11 @@ export default function Dashboard() {
                   )}
                 </div>
               </div>
-              <div className="balance-actions">
-                {!demoMode && (
+              {!demoMode && (
+                <div className="balance-actions">
                   <button className="btn-secondary" onClick={() => openAddFunds()}>Add funds</button>
-                )}
-                <button className="btn-primary" disabled>Invest in stocks</button>
-              </div>
+                </div>
+              )}
             </div>
 
             {demoMode && (
