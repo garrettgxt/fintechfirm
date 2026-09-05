@@ -115,6 +115,15 @@ export default function Dashboard() {
 
   const displayedUsdValue = demoMode ? demoBalanceUsd : usdValue;
 
+  // Whichever asset + quantity is currently relevant to show the user —
+  // the demo holding if Demo Mode is on, otherwise their real ETH balance.
+  const displayAsset = demoMode ? demoAsset : "ETH";
+  const displayQuantity = demoMode
+    ? assetPrices[demoAsset]
+      ? demoAssetAmount / assetPrices[demoAsset]
+      : null
+    : ethBalance;
+
   function openBanxa() {
     const destination = WALLET_ADDRESSES[buyCurrency];
     if (!destination) return;
@@ -128,10 +137,6 @@ export default function Dashboard() {
     setMoonpayOpen(true);
     setBuyOpen(false);
   }
-
-  // Destination address for whichever currency is currently selected in
-  // the buy modal — used by the MoonPay widget below.
-  const moonpayDestination = WALLET_ADDRESSES[buyCurrency];
 
   async function signMoonPayUrl(url) {
     // Cloudflare Pages Functions route: /sign-moonpay-url
@@ -208,7 +213,11 @@ export default function Dashboard() {
             {walletAddress ? (
               <>
                 <span className="status-pill healthy">Ready to receive funds</span>
-                <div className="wallet-address num">{walletAddress}</div>
+                <div className="wallet-address num">
+                  {displayQuantity !== null
+                    ? `${displayQuantity.toFixed(5)} ${displayAsset}`
+                    : "Loading…"}
+                </div>
               </>
             ) : (
               <div style={{ fontSize: 14, color: "rgba(237,231,218,0.5)" }}>
@@ -369,14 +378,15 @@ export default function Dashboard() {
       <MoonPayBuyWidget
         variant="overlay"
         visible={moonpayOpen}
-        walletAddress={moonpayDestination}
-        // Locked to whichever currency was picked in the modal above, so
-        // the address and the currency always match. Note this still
-        // doesn't stop someone from manually switching currency inside
-        // MoonPay's own widget UI once it's open — worth locking down
-        // (e.g. showAllCryptoCurrencies / currencyCode restriction) before
-        // any real users touch this.
-        defaultCurrencyCode={buyCurrency}
+        // Passing all 4 addresses (instead of a single walletAddress) means
+        // MoonPay only shows currencies we actually have an address for —
+        // nothing else is even selectable. currencyCode (not
+        // defaultCurrencyCode) locks the pick to whichever one was chosen
+        // in the modal above, so it can't be changed inside MoonPay's own
+        // UI once the widget is open. This closes the mismatch risk that
+        // used to exist here.
+        walletAddresses={JSON.stringify(WALLET_ADDRESSES)}
+        currencyCode={buyCurrency}
         onUrlSignatureRequested={signMoonPayUrl}
         onClose={() => setMoonpayOpen(false)}
       />
