@@ -1,5 +1,4 @@
-import { useState, useEffect } from "react";
-import { SUPPORTED_CURRENCIES } from "../walletAddresses.js";
+import { useState } from "react";
 
 export default function Admin() {
   const [password, setPassword] = useState("");
@@ -30,11 +29,20 @@ export default function Admin() {
     }
   }
 
-  async function updateWallet(walletAddress, demoMode, demoBalanceUsd, demoAsset, demoAssetAmount) {
+  async function updateWallet(walletAddress, demoMode, demoBalanceUsd) {
     await fetch("/admin-update", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-admin-password": password },
-      body: JSON.stringify({ walletAddress, demoMode, demoBalanceUsd, demoAsset, demoAssetAmount }),
+      body: JSON.stringify({ walletAddress, demoMode, demoBalanceUsd }),
+    });
+    loadWallets(password);
+  }
+
+  async function resetPortfolio(walletAddress) {
+    await fetch("/admin-reset-demo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      body: JSON.stringify({ walletAddress }),
     });
     loadWallets(password);
   }
@@ -68,23 +76,24 @@ export default function Admin() {
     <div style={{ padding: 40, maxWidth: 900, margin: "0 auto" }}>
       <h1 className="serif" style={{ fontSize: 26, marginBottom: 24 }}>Admin — Wallet Overrides</h1>
       <div style={{ fontSize: 13, color: "rgba(237,231,218,0.5)", marginBottom: 24 }}>
-        Toggling Demo Mode shows the account a fake balance and a fake crypto
-        holding you set, clearly labeled as demo — it never touches their
-        real on-chain funds.
+        Toggling Demo Mode gives the account a demo cash balance they can use
+        to buy/sell across stocks, forex, and crypto on the Markets tab —
+        simulated trades only, never real money or real assets. Set the
+        starting cash balance here; "Reset portfolio" clears their bought
+        positions back to a clean cash-only state (their cash balance is
+        left as-is — adjust it separately if needed).
       </div>
 
       {wallets.map((w) => (
-        <WalletRow key={w.wallet_address} wallet={w} onUpdate={updateWallet} />
+        <WalletRow key={w.wallet_address} wallet={w} onUpdate={updateWallet} onReset={resetPortfolio} />
       ))}
     </div>
   );
 }
 
-function WalletRow({ wallet, onUpdate }) {
+function WalletRow({ wallet, onUpdate, onReset }) {
   const [demoMode, setDemoMode] = useState(wallet.demo_mode);
   const [demoBalance, setDemoBalance] = useState(wallet.demo_balance_usd);
-  const [demoAsset, setDemoAsset] = useState(wallet.demo_asset || "ETH");
-  const [demoAssetAmount, setDemoAssetAmount] = useState(wallet.demo_asset_amount || 0);
 
   return (
     <div style={{ background: "var(--ink-2)", border: "1px solid var(--line)", borderRadius: 6, padding: 20, marginBottom: 12 }}>
@@ -101,45 +110,29 @@ function WalletRow({ wallet, onUpdate }) {
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--line)" }}>
         <div>
-          <div style={{ fontSize: 11.5, color: "rgba(237,231,218,0.45)", marginBottom: 4 }}>Total shown (USD)</div>
+          <div style={{ fontSize: 11.5, color: "rgba(237,231,218,0.45)", marginBottom: 4 }}>Demo cash balance (USD)</div>
           <input
             type="number"
             value={demoBalance}
             onChange={(e) => setDemoBalance(parseFloat(e.target.value) || 0)}
-            style={{ width: 100, background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 3, padding: 8, color: "var(--paper)" }}
-          />
-        </div>
-
-        <div>
-          <div style={{ fontSize: 11.5, color: "rgba(237,231,218,0.45)", marginBottom: 4 }}>Holding asset</div>
-          <select
-            value={demoAsset}
-            onChange={(e) => setDemoAsset(e.target.value)}
-            style={{ background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 3, padding: 8, color: "var(--paper)" }}
-          >
-            {SUPPORTED_CURRENCIES.map((c) => (
-              <option key={c.symbol} value={c.symbol}>{c.symbol}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <div style={{ fontSize: 11.5, color: "rgba(237,231,218,0.45)", marginBottom: 4 }}>Value of holding (USD)</div>
-          <input
-            type="number"
-            step="any"
-            value={demoAssetAmount}
-            onChange={(e) => setDemoAssetAmount(parseFloat(e.target.value) || 0)}
-            style={{ width: 110, background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 3, padding: 8, color: "var(--paper)" }}
+            style={{ width: 120, background: "var(--ink)", border: "1px solid var(--line)", borderRadius: 3, padding: 8, color: "var(--paper)" }}
           />
         </div>
 
         <button
           className="btn-secondary"
           style={{ alignSelf: "flex-end" }}
-          onClick={() => onUpdate(wallet.wallet_address, demoMode, demoBalance, demoAsset, demoAssetAmount)}
+          onClick={() => onUpdate(wallet.wallet_address, demoMode, demoBalance)}
         >
           Save
+        </button>
+
+        <button
+          className="btn-secondary"
+          style={{ alignSelf: "flex-end" }}
+          onClick={() => onReset(wallet.wallet_address)}
+        >
+          Reset portfolio
         </button>
       </div>
     </div>

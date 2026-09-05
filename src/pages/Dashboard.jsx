@@ -1,32 +1,29 @@
 import { useState, useEffect, useRef } from "react";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { SUPPORTED_CURRENCIES } from "../walletAddresses.js";
+import { STOCKS, ETFS, FOREX, CRYPTO, NON_CRYPTO_SYMBOLS, findAsset } from "../assetCatalog.js";
 import { useLivePrices } from "../hooks/useLivePrices.js";
+import { useMarketQuotes } from "../hooks/useMarketQuotes.js";
 import PriceChart from "../components/PriceChart.jsx";
 import Sparkline from "../components/Sparkline.jsx";
 import CreditInvoiceModal from "../components/CreditInvoiceModal.jsx";
-
-// CoinGecko ids for each symbol we support, used to convert a demo dollar
-// value into a plausible coin quantity to display.
-const COINGECKO_IDS = { ETH: "ethereum", BTC: "bitcoin", LTC: "litecoin", SOL: "solana" };
+import TradeModal from "../components/TradeModal.jsx";
 
 export default function Dashboard() {
   const { user, logout } = usePrivy();
   const { wallets } = useWallets();
   const [demoMode, setDemoMode] = useState(false);
-  const [demoBalanceUsd, setDemoBalanceUsd] = useState(0);
-  const [demoAsset, setDemoAsset] = useState("ETH");
-  const [demoAssetAmount, setDemoAssetAmount] = useState(0); // dollar value of the demo holding
-  const [assetPrices, setAssetPrices] = useState({}); // { ETH: 3450.12, BTC: ..., LTC: ..., SOL: ... }
-  const [demoQuantity, setDemoQuantity] = useState(null); // coin quantity, frozen once at load so it behaves like a real holding
+  const [demoCashUsd, setDemoCashUsd] = useState(0);
+  const [demoPositions, setDemoPositions] = useState([]); // [{symbol, assetType, quantity, avgCost}]
   const [tab, setTab] = useState("portfolio");
   const [balanceDelta, setBalanceDelta] = useState(null); // { amount, direction } — a brief "+$0.03" flash
   const [creditOpen, setCreditOpen] = useState(false);
   const [creditCurrency, setCreditCurrency] = useState("eth"); // which coin is preselected when the modal opens
   const [creditBalance, setCreditBalance] = useState(0); // custodial site-credit balance, NOT on-chain funds
+  const [tradeModal, setTradeModal] = useState(null); // { symbol, name, assetType, side, price, holdingQuantity }
   const prevDisplayedValue = useRef(null);
   const deltaTimeout = useRef(null);
   const livePrices = useLivePrices();
+  const marketQuotes = useMarketQuotes(NON_CRYPTO_SYMBOLS);
 
   // The embedded wallet Privy created automatically on login.
   const embeddedWallet = wallets.find((w) => w.walletClientType === "privy");
@@ -34,49 +31,36 @@ export default function Dashboard() {
 
   const email = user?.email?.address || user?.google?.email || user?.apple?.email || "";
 
-  // Fetch a live USD price for every asset we support (not just ETH), so a
-  // demo holding set in dollars can be shown as a coin quantity, the same
-  // way the real ETH row shows quantity + USD.
-  useEffect(() => {
-    const ids = Object.values(COINGECKO_IDS).join(",");
-    fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`)
-      .then((res) => res.json())
-      .then((data) => {
-        const prices = {};
-        for (const [symbol, id] of Object.entries(COINGECKO_IDS)) {
-          prices[symbol] = data?.[id]?.usd ?? null;
-        }
-        setAssetPrices(prices);
-      })
-      .catch((err) => console.error("Failed to fetch asset prices:", err));
-  }, []);
-
-  // Register this wallet (for the admin panel) and check whether it's
-  // been switched into Demo Mode.
+  // Register this wallet for the admin panel.
   useEffect(() => {
     if (!walletAddress) return;
-
     fetch("/register-wallet", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ walletAddress, email }),
     }).catch((err) => console.error("Wallet registration failed:", err));
-
-    fetch(`/get-override?wallet=${encodeURIComponent(walletAddress)}`)
-      .then((res) => res.json())
-      .then((data) => {
-        setDemoMode(data.demoMode);
-        setDemoBalanceUsd(data.demoBalanceUsd);
-        setDemoAsset(data.demoAsset);
-        setDemoAssetAmount(data.demoAssetAmount);
-      })
-      .catch((err) => console.error("Demo mode check failed:", err));
   }, [walletAddress, email]);
 
+  // Demo Mode's paper-trading portfolio (cash + positions). Only
+  // meaningful when demoMode is on — see Site Credit below for what a
+  // real account's balance actually is.
+  function refreshDemoPortfolio() {
+    if (!walletAddress) return;
+    fetch(`/get-demo-portfolio?wallet=${encodeURIComponent(walletAddress)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setDemoMode(data.demoMode ?? false);
+        setDemoCashUsd(data.cashUsd ?? 0);
+        setDemoPositions(data.positions ?? []);
+      })
+      .catch((err) => console.error("Failed to fetch demo portfolio:", err));
+  }
+
+  useEffect(refreshDemoPortfolio, [walletAddress]);
+
   // Site-credit balance (custodial — see functions/nowpayments-webhook.js).
-  // Separate from the wallet balance above on purpose: one is the user's
-  // own on-chain holdings, the other is money Coinstate Capital is holding
-  // on their behalf, and conflating the two would be misleading.
+  // Separate from Demo Mode on purpose: one is real money Coinstate
+  // Capital is holding, the other is a simulated paper-trading balance.
   function refreshCreditBalance() {
     if (!walletAddress) return;
     fetch(`/get-credit-balance?wallet=${encodeURIComponent(walletAddress)}`)
@@ -87,27 +71,23 @@ export default function Dashboard() {
 
   useEffect(refreshCreditBalance, [walletAddress]);
 
-  // Freeze the demo holding's coin quantity the first time we can compute
-  // it, so it behaves like a real holding from then on: the quantity of
-  // coins stays fixed, and its dollar value moves with the live price —
-  // instead of the dollar value being pinned to a static admin-set number.
-  useEffect(() => {
-    if (!demoMode || demoQuantity !== null) return;
-    const price = assetPrices[demoAsset];
-    if (price) setDemoQuantity(demoAssetAmount / price);
-  }, [demoMode, demoAsset, demoAssetAmount, assetPrices, demoQuantity]);
+  // Current price for any catalog symbol, from whichever live feed
+  // covers it — used for portfolio valuation and the trade modal's
+  // estimate. Falls back to null (caller decides how to handle that).
+  function getPrice(symbol, assetType) {
+    if (assetType === "crypto") return livePrices[symbol]?.price ?? null;
+    return marketQuotes[symbol]?.price ?? null;
+  }
 
-  // Demo Mode's holding — only meaningful when demoMode is on, since
-  // there's no real on-chain asset being tracked otherwise (see Site
-  // Credit below for what a real account's balance actually is now).
-  const liveAssetPrice = demoMode ? livePrices[demoAsset]?.price : null;
-  const liveUsdValue =
-    demoMode && demoQuantity != null && liveAssetPrice != null ? demoQuantity * liveAssetPrice : null;
+  const demoPositionsValue = demoPositions.reduce((sum, p) => {
+    const price = getPrice(p.symbol, p.assetType) ?? p.avgCost; // avoid a $0 flash before quotes load
+    return sum + p.quantity * price;
+  }, 0);
+  const demoPortfolioTotal = demoCashUsd + demoPositionsValue;
 
-  // A real account's "Total portfolio value" is its Site Credit balance —
-  // the Privy wallet's on-chain balance is no longer shown here, since
-  // nothing currently funds it and displaying it was misleading.
-  const displayedUsdValue = demoMode ? liveUsdValue ?? demoBalanceUsd : creditBalance;
+  // A real account's "Total portfolio value" is its Site Credit balance;
+  // a demo account's is its simulated cash + positions.
+  const displayedUsdValue = demoMode ? demoPortfolioTotal : creditBalance;
 
   // Flash a "+$0.03" / "-$0.05" badge next to the balance whenever it moves.
   useEffect(() => {
@@ -126,11 +106,59 @@ export default function Dashboard() {
   useEffect(() => () => clearTimeout(deltaTimeout.current), []);
 
   // Opens the Add funds modal, optionally preselecting a currency — used
-  // by the sidebar/balance-card buttons (default) and by a chart card's
-  // "Buy" button on the Markets tab (preselects that coin).
+  // by the sidebar/balance-card buttons (default) and, for a real
+  // (non-demo) account, by a crypto chart's "Buy" button on the Markets
+  // tab (preselects that coin).
   function openAddFunds(symbol) {
     setCreditCurrency(symbol ? symbol.toLowerCase() : "eth");
     setCreditOpen(true);
+  }
+
+  // Opens the Demo Mode buy/sell modal for one catalog asset.
+  function openTrade(asset, side) {
+    const holding = demoPositions.find((p) => p.symbol === asset.symbol);
+    setTradeModal({
+      symbol: asset.symbol,
+      name: asset.name,
+      assetType: asset.type,
+      side,
+      price: getPrice(asset.symbol, asset.type),
+      holdingQuantity: holding?.quantity ?? 0,
+    });
+  }
+
+  // A card's Buy button: Demo Mode trades any asset; a real account can
+  // only "buy" crypto today, and that means funding Site Credit, not a
+  // simulated trade — real stock/forex investing isn't built yet.
+  function handleBuy(asset) {
+    if (demoMode) openTrade(asset, "buy");
+    else if (asset.type === "crypto") openAddFunds(asset.symbol);
+  }
+
+  function handleSell(asset) {
+    if (demoMode) openTrade(asset, "sell");
+  }
+
+  function renderAssetGroup(title, assets) {
+    return (
+      <div key={title} style={{ marginBottom: 32 }}>
+        <h3 style={{ fontSize: 15, marginBottom: 14, color: "rgba(237,231,218,0.6)" }}>{title}</h3>
+        <div className="markets-grid">
+          {assets.map((asset) => (
+            <PriceChart
+              key={asset.symbol}
+              symbol={asset.symbol}
+              name={asset.name}
+              type={asset.type}
+              quote={asset.type !== "crypto" ? marketQuotes[asset.symbol] : undefined}
+              holdingQuantity={demoPositions.find((p) => p.symbol === asset.symbol)?.quantity ?? 0}
+              onBuy={demoMode || asset.type === "crypto" ? () => handleBuy(asset) : undefined}
+              onSell={demoMode ? () => handleSell(asset) : undefined}
+            />
+          ))}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -146,7 +174,7 @@ export default function Dashboard() {
               ↗ Markets
             </button>
             <button onClick={() => openAddFunds()}>＋ Add funds</button>
-            <button disabled title="Coming soon">↗ Invest in stocks</button>
+            <button disabled title="Coming soon">↗ Invest in stocks (real money)</button>
             <button disabled title="Coming soon">⚙ Settings</button>
           </nav>
         </div>
@@ -168,11 +196,15 @@ export default function Dashboard() {
 
         {tab === "markets" ? (
           <div className="content">
-            <div className="markets-grid">
-              {SUPPORTED_CURRENCIES.map((c) => (
-                <PriceChart key={c.symbol} symbol={c.symbol} onBuy={openAddFunds} />
-              ))}
-            </div>
+            {demoMode && (
+              <div style={{ fontSize: 12.5, color: "var(--brass-bright)", marginBottom: 24 }}>
+                Demo Mode is on — Buy/Sell here trades your demo cash balance, not real money.
+              </div>
+            )}
+            {renderAssetGroup("Stocks", STOCKS)}
+            {renderAssetGroup("Index ETFs", ETFS)}
+            {renderAssetGroup("Forex", FOREX)}
+            {renderAssetGroup("Crypto", CRYPTO)}
           </div>
         ) : (
           <div className="content">
@@ -206,11 +238,9 @@ export default function Dashboard() {
             {demoMode && (
               <>
                 <div className="panel">
-                  <h3>Your wallet</h3>
-                  <span className="status-pill healthy">Ready to receive funds</span>
-                  <div className="wallet-address num">
-                    {demoQuantity !== null ? `${demoQuantity.toFixed(5)} ${demoAsset}` : "Loading…"}
-                  </div>
+                  <h3>Demo cash available</h3>
+                  <span className="status-pill healthy">Ready to trade</span>
+                  <div className="wallet-address num">${demoCashUsd.toFixed(2)}</div>
                 </div>
 
                 <div className="holdings-panel">
@@ -219,44 +249,58 @@ export default function Dashboard() {
                       <tr><th>Asset</th><th></th><th>Value</th></tr>
                     </thead>
                   </table>
-                  {demoAssetAmount > 0 ? (
+                  {demoPositions.length > 0 ? (
                     <table>
                       <tbody>
-                        <tr>
-                          <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)" }}>
-                            <div style={{ fontWeight: 600 }}>
-                              {SUPPORTED_CURRENCIES.find((c) => c.symbol === demoAsset)?.label || demoAsset}
-                            </div>
-                            <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>{demoAsset}</div>
-                          </td>
-                          <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)" }}>
-                            <Sparkline
-                              history={livePrices[demoAsset]?.history}
-                              isUp={(livePrices[demoAsset]?.changePct24h ?? 0) >= 0}
-                            />
-                          </td>
-                          <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)", textAlign: "right" }} className="num">
-                            <div>
-                              {demoQuantity !== null ? `${demoQuantity.toFixed(5)} ${demoAsset}` : "Loading price…"}
-                            </div>
-                            <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>
-                              {liveUsdValue !== null ? `$${liveUsdValue.toFixed(2)}` : `$${demoAssetAmount.toFixed(2)}`}
-                            </div>
-                            {livePrices[demoAsset]?.changePct24h != null && (
-                              <div
-                                className="holdings-row-change"
-                                style={{ color: livePrices[demoAsset].changePct24h >= 0 ? "var(--sage)" : "var(--rust)" }}
-                              >
-                                {livePrices[demoAsset].changePct24h >= 0 ? "+" : ""}
-                                {livePrices[demoAsset].changePct24h.toFixed(2)}%
-                              </div>
-                            )}
-                          </td>
-                        </tr>
+                        {demoPositions.map((p) => {
+                          const asset = findAsset(p.symbol);
+                          const price = getPrice(p.symbol, p.assetType);
+                          const value = price != null ? p.quantity * price : null;
+                          const costBasis = p.quantity * p.avgCost;
+                          const pnl = value != null ? value - costBasis : null;
+                          const pnlPct = costBasis > 0 && pnl != null ? (pnl / costBasis) * 100 : null;
+                          return (
+                            <tr key={p.symbol}>
+                              <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)" }}>
+                                <div style={{ fontWeight: 600 }}>{asset?.name || p.symbol}</div>
+                                <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>{p.symbol}</div>
+                              </td>
+                              <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)" }}>
+                                {p.assetType === "crypto" && (
+                                  <Sparkline
+                                    history={livePrices[p.symbol]?.history}
+                                    isUp={(livePrices[p.symbol]?.changePct24h ?? 0) >= 0}
+                                  />
+                                )}
+                              </td>
+                              <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)", textAlign: "right" }} className="num">
+                                <div>{p.quantity} {p.symbol}</div>
+                                <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>
+                                  {value != null ? `$${value.toFixed(2)}` : "Loading…"}
+                                </div>
+                                {pnlPct != null && (
+                                  <div
+                                    className="holdings-row-change"
+                                    style={{ color: pnl >= 0 ? "var(--sage)" : "var(--rust)" }}
+                                  >
+                                    {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)} ({pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%)
+                                  </div>
+                                )}
+                                <button
+                                  className="btn-secondary"
+                                  style={{ marginTop: 8, padding: "4px 10px", fontSize: 12 }}
+                                  onClick={() => asset && openTrade(asset, "sell")}
+                                >
+                                  Sell
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   ) : (
-                    <div className="empty-state">No holdings yet — add funds to see it appear here.</div>
+                    <div className="empty-state">No holdings yet — buy something on the Markets tab.</div>
                   )}
                 </div>
               </>
@@ -271,6 +315,21 @@ export default function Dashboard() {
           initialCurrency={creditCurrency}
           onClose={() => setCreditOpen(false)}
           onCredited={refreshCreditBalance}
+        />
+      )}
+
+      {tradeModal && (
+        <TradeModal
+          walletAddress={walletAddress}
+          symbol={tradeModal.symbol}
+          name={tradeModal.name}
+          assetType={tradeModal.assetType}
+          side={tradeModal.side}
+          price={tradeModal.price}
+          cashUsd={demoCashUsd}
+          holdingQuantity={tradeModal.holdingQuantity}
+          onClose={() => setTradeModal(null)}
+          onTraded={refreshDemoPortfolio}
         />
       )}
     </div>

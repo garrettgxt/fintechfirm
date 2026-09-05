@@ -11,24 +11,48 @@
 
 import { useEffect, useState } from "react";
 
+// Every symbol here must be a real Coinbase Exchange USD product (verified
+// against https://api.exchange.coinbase.com/products) — Coinbase silently
+// ignores a subscribe request for an unknown product_id, which looks
+// exactly like "Loading forever" with no error. TRX, for example, isn't
+// listed on Coinbase Exchange at all, which is why the catalog uses UNI
+// instead — check before adding another symbol here.
 const PRODUCTS = {
   BTC: "BTC-USD",
   ETH: "ETH-USD",
   LTC: "LTC-USD",
   SOL: "SOL-USD",
+  XRP: "XRP-USD",
+  DOGE: "DOGE-USD",
+  ADA: "ADA-USD",
+  AVAX: "AVAX-USD",
+  DOT: "DOT-USD",
+  LINK: "LINK-USD",
+  BNB: "BNB-USD",
+  UNI: "UNI-USD",
 };
 
-const COINGECKO_IDS = { BTC: "bitcoin", ETH: "ethereum", LTC: "litecoin", SOL: "solana" };
+const COINGECKO_IDS = {
+  BTC: "bitcoin",
+  ETH: "ethereum",
+  LTC: "litecoin",
+  SOL: "solana",
+  XRP: "ripple",
+  DOGE: "dogecoin",
+  ADA: "cardano",
+  AVAX: "avalanche-2",
+  DOT: "polkadot",
+  LINK: "chainlink",
+  BNB: "binancecoin",
+  UNI: "uniswap",
+};
 
 const HISTORY_LENGTH = 60; // ~last few minutes of ticks, enough for a sparkline
 
 const store = {
-  prices: {
-    BTC: { price: null, prevPrice: null, changePct24h: null, history: [] },
-    ETH: { price: null, prevPrice: null, changePct24h: null, history: [] },
-    LTC: { price: null, prevPrice: null, changePct24h: null, history: [] },
-    SOL: { price: null, prevPrice: null, changePct24h: null, history: [] },
-  },
+  prices: Object.fromEntries(
+    Object.keys(PRODUCTS).map((symbol) => [symbol, { price: null, prevPrice: null, changePct24h: null, history: [] }])
+  ),
   listeners: new Set(),
   started: false,
   ws: null,

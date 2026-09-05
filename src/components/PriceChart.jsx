@@ -2,29 +2,44 @@ import { useEffect, useRef, useState } from "react";
 import { createChart, AreaSeries } from "lightweight-charts";
 import { useLivePrices } from "../hooks/useLivePrices.js";
 
-// Binance's public klines endpoint has generous free, keyless rate limits
-// (unlike CoinGecko's anonymous tier, which a handful of simultaneous
-// chart loads can exhaust) — used here just for chart history. Live ticks
-// still come from Coinbase (see useLivePrices).
-const RANGES = [
+// Crypto history comes from Binance's public klines endpoint (generous
+// free, keyless rate limits). Stock/ETF/forex history comes from
+// functions/market-history.js (Twelve Data, proxied — see that file for
+// why it's cached server-side).
+const CRYPTO_RANGES = [
   { label: "1D", interval: "5m", limit: 288 },
   { label: "1W", interval: "1h", limit: 168 },
   { label: "1M", interval: "4h", limit: 180 },
 ];
+const MARKET_RANGES = [
+  { label: "1D", interval: "5min", outputsize: 100 },
+  { label: "1W", interval: "1h", outputsize: 168 },
+  { label: "1M", interval: "1day", outputsize: 30 },
+];
 
-const LABELS = { BTC: "Bitcoin", ETH: "Ethereum", LTC: "Litecoin", SOL: "Solana" };
+const CRYPTO_LABELS = { BTC: "Bitcoin", ETH: "Ethereum", LTC: "Litecoin", SOL: "Solana" };
 
 const UP_COLORS = { lineColor: "#5C8F72", topColor: "rgba(92,143,114,0.28)" };
 const DOWN_COLORS = { lineColor: "#A25A45", topColor: "rgba(162,90,69,0.28)" };
 
-export default function PriceChart({ symbol, onBuy }) {
+// For type !== "crypto", pass `quote` ({price, changePct}) from a single
+// batched useMarketQuotes call in the parent — a card doesn't poll its
+// own quote, since a screen full of cards would each fire a separate
+// upstream request and blow through Twelve Data's free-tier rate limit.
+// Crypto keeps using its own useLivePrices() call directly; that's a
+// shared WebSocket singleton, so per-card use is free.
+export default function PriceChart({ symbol, name, type = "crypto", quote, onBuy, onSell, holdingQuantity }) {
+  const isCrypto = type === "crypto";
+  const ranges = isCrypto ? CRYPTO_RANGES : MARKET_RANGES;
   const containerRef = useRef(null);
   const chartRef = useRef(null);
   const seriesRef = useRef(null);
-  const [range, setRange] = useState(RANGES[0]);
-  const prices = useLivePrices();
-  const live = prices[symbol];
-  const isUp = (live?.changePct24h ?? 0) >= 0;
+  const [range, setRange] = useState(ranges[0]);
+
+  const cryptoPrices = useLivePrices();
+  const live = isCrypto ? cryptoPrices[symbol] : quote;
+  const isUp = (live?.changePct ?? live?.changePct24h ?? 0) >= 0;
+  const changePct = live?.changePct ?? live?.changePct24h ?? null;
 
   // Create the chart once per mounted card.
   useEffect(() => {
@@ -78,11 +93,12 @@ export default function PriceChart({ symbol, onBuy }) {
     seriesRef.current?.applyOptions(isUp ? UP_COLORS : DOWN_COLORS);
   }, [isUp]);
 
-  // Load real history for the selected range from Binance's public klines
-  // endpoint. A couple of retries handle any transient network hiccup.
+  // Load real history for the selected range.
   useEffect(() => {
     let cancelled = false;
-    const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${range.interval}&limit=${range.limit}`;
+    const url = isCrypto
+      ? `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${range.interval}&limit=${range.limit}`
+      : `/market-history?symbol=${encodeURIComponent(symbol)}&interval=${range.interval}&outputsize=${range.outputsize}`;
 
     async function loadWithRetry() {
       for (let attempt = 0; attempt < 3; attempt++) {
@@ -90,17 +106,26 @@ export default function PriceChart({ symbol, onBuy }) {
         try {
           const res = await fetch(url);
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const candles = await res.json();
-          if (cancelled || !seriesRef.current || !Array.isArray(candles)) return;
-          const seen = new Set();
-          const points = [];
-          for (const candle of candles) {
-            const time = Math.floor(candle[0] / 1000);
-            const close = parseFloat(candle[4]);
-            if (seen.has(time) || Number.isNaN(close)) continue;
-            seen.add(time);
-            points.push({ time, value: close });
+          const data = await res.json();
+          if (cancelled || !seriesRef.current) return;
+
+          let points;
+          if (isCrypto) {
+            if (!Array.isArray(data)) throw new Error("Unexpected response shape");
+            const seen = new Set();
+            points = [];
+            for (const candle of data) {
+              const time = Math.floor(candle[0] / 1000);
+              const close = parseFloat(candle[4]);
+              if (seen.has(time) || Number.isNaN(close)) continue;
+              seen.add(time);
+              points.push({ time, value: close });
+            }
+          } else {
+            if (!Array.isArray(data.points)) throw new Error(data.error || "Unexpected response shape");
+            points = data.points;
           }
+
           seriesRef.current.setData(points);
           chartRef.current?.timeScale().fitContent();
           return;
@@ -115,43 +140,52 @@ export default function PriceChart({ symbol, onBuy }) {
     return () => {
       cancelled = true;
     };
-  }, [symbol, range]);
+  }, [symbol, range, isCrypto]);
 
-  // Append each real-time tick onto the end of the chart.
+  // Append each new price (real-time tick for crypto, polled quote for
+  // stock/forex) onto the end of the chart.
   useEffect(() => {
     if (live?.price == null || !seriesRef.current) return;
     seriesRef.current.update({ time: Math.floor(Date.now() / 1000), value: live.price });
   }, [live?.price]);
 
   const changeColor = isUp ? "var(--sage)" : "var(--rust)";
+  const displayName = name || CRYPTO_LABELS[symbol] || symbol;
 
   return (
     <div className="chart-card">
       <div className="chart-card-head">
         <div>
           <div className="chart-card-title">
-            {LABELS[symbol]} <span className="chart-card-symbol">{symbol}</span>
+            {displayName} <span className="chart-card-symbol">{symbol}</span>
           </div>
           <div className="chart-card-price num">
             {live?.price != null
               ? `$${live.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
               : "Loading…"}
-            {live?.changePct24h != null && (
+            {changePct != null && (
               <span className="chart-card-change" style={{ color: changeColor }}>
-                {live.changePct24h >= 0 ? "+" : ""}
-                {live.changePct24h.toFixed(2)}%
+                {changePct >= 0 ? "+" : ""}
+                {changePct.toFixed(2)}%
               </span>
             )}
           </div>
         </div>
-        {onBuy && (
-          <button className="btn-secondary chart-buy-btn" onClick={() => onBuy(symbol)}>
-            Buy
-          </button>
-        )}
+        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+          {onSell && holdingQuantity > 0 && (
+            <button className="btn-secondary chart-buy-btn" onClick={() => onSell(symbol)}>
+              Sell
+            </button>
+          )}
+          {onBuy && (
+            <button className="btn-secondary chart-buy-btn" onClick={() => onBuy(symbol)}>
+              Buy
+            </button>
+          )}
+        </div>
       </div>
       <div className="chart-range-toggle">
-        {RANGES.map((r) => (
+        {ranges.map((r) => (
           <button key={r.label} className={r.label === range.label ? "active" : ""} onClick={() => setRange(r)}>
             {r.label}
           </button>

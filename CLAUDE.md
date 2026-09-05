@@ -64,20 +64,65 @@
   Credit (below), which only changes when a payment is actually credited,
   not a continuous tick.
 
-## Demo Mode
-- Admin panel at /admin (password-gated via ADMIN_PASSWORD env var, not
-  linked in site nav) lets you set, per wallet: demo_mode (on/off),
-  demo_balance_usd (total shown on dashboard), demo_asset (ETH/BTC/LTC/SOL),
-  and demo_asset_amount.
-- demo_asset_amount IS A DOLLAR VALUE, not a coin quantity — this isn't
-  obvious from the column name, so don't assume otherwise. Dashboard.jsx
-  fetches live CoinGecko prices for all 4 assets and converts this dollar
-  value into a displayed coin quantity.
-- When demo_mode is on, Dashboard.jsx shows a "Your wallet" panel and a
-  holdings table with the demo asset/quantity — these are demo-mode-only
-  now; a real (non-demo) account shows neither, just the Site Credit
-  balance (below), since there's no real on-chain balance being tracked
-  or displayed anymore.
+## Demo Mode — interactive paper trading (stocks, forex, crypto)
+- IMPORTANT: real stock/forex investing is explicitly NOT built — this is
+  a simulated internal ledger only, confirmed with the user as the model
+  before building (the alternative, real brokerage execution via
+  something like Alpaca, was explicitly deferred). Never let Demo Mode
+  trading touch a real account's Site Credit — functions/demo-trade.js
+  and the `apply_demo_trade` Postgres function both hard-require
+  `wallet_overrides.demo_mode = true` before doing anything.
+- Admin panel at /admin (password-gated via ADMIN_PASSWORD, not linked in
+  site nav) now just toggles demo_mode and sets the demo cash balance
+  (`wallet_overrides.demo_balance_usd`, repurposed — see below), plus a
+  "Reset portfolio" button (functions/admin-reset-demo.js) that clears
+  `demo_positions` for that wallet. The old per-wallet single-asset
+  fields (demo_asset, demo_asset_amount) are no longer written to or
+  read anywhere — left in the DB unused rather than migrated away, not
+  worth it for a demo feature.
+- Data model: `wallet_overrides.demo_balance_usd` is the demo CASH
+  balance (used to mean "total shown on dashboard" before this — that
+  older meaning is gone). `demo_positions` (new table, wallet_address +
+  symbol as PK) holds what a demo user has actually bought — quantity +
+  avg_cost_usd, updated via the `apply_demo_trade` Postgres function
+  (does the whole buy/sell atomically: validates demo_mode, checks
+  cash/position, moves money, upserts/deletes the position row).
+- A demo user can buy/sell any asset in src/assetCatalog.js (stocks,
+  index ETFs, forex, and 12 crypto — the same PriceChart.jsx cards on the
+  Markets tab get Buy/Sell buttons when demoMode is true). For a real
+  (non-demo) account, only crypto shows a Buy button, and it opens Add
+  Funds (Site Credit, below) — not a trade — since real stock/forex
+  investing isn't built.
+- Dashboard.jsx shows a demo cash panel + a multi-position holdings table
+  (with P&L per position) only when demo_mode is true; a real account
+  shows neither, just the Site Credit balance.
+
+## Market Data for Stocks/ETFs/Forex (Twelve Data)
+- Crypto is untouched — still Coinbase WS (live ticks) + Binance klines
+  (history), see Live Market Data above. Stocks/ETFs/forex use a
+  different provider, Twelve Data, since neither Coinbase nor Binance
+  cover those: functions/market-quote.js (batched live quotes) and
+  functions/market-history.js (historical candles, reshaped into the
+  same {time, value}[] PriceChart.jsx already expects for crypto).
+- Needs `TWELVE_DATA_API_KEY` (Cloudflare secret) from the user's own
+  Twelve Data account — not set yet as of this writing, so stock/forex
+  quotes and charts return a clean "not configured" error until it is;
+  crypto is unaffected either way.
+- Twelve Data's free tier (800 calls/day, 8/min) is shared across every
+  visitor to the site, not per-user, so both functions cache their
+  upstream response for ~45s via the Cache API, keyed by the exact
+  request URL. Just as important: PriceChart.jsx does NOT poll its own
+  quote for non-crypto symbols — it takes a `quote` prop instead, fed by
+  ONE batched src/hooks/useMarketQuotes.js call in the parent
+  (Dashboard.jsx polls all of src/assetCatalog.js's NON_CRYPTO_SYMBOLS at
+  once; Landing.jsx polls just its 4 homepage symbols). If you add a new
+  place that renders PriceChart for non-crypto symbols, do the same —
+  don't let PriceChart call useMarketQuotes itself, or a screen full of
+  cards fans out into many separate upstream calls and blows through the
+  rate limit.
+- src/assetCatalog.js is the curated catalog (~24 stocks, 3 index ETFs,
+  5 forex pairs, 12 crypto) — deliberately not "all stocks/every pair",
+  which isn't realistically buildable; scoped down with the user.
 
 ## Site Credit (custodial — separate from the self-custodial wallet)
 - This is now the site's PRIMARY funding entry point ("Add funds" in the
@@ -127,13 +172,15 @@
 
 ## Supabase
 - Actively used, not optional — table wallet_overrides (wallet_address,
-  email, demo_mode, demo_balance_usd, demo_asset, demo_asset_amount,
-  updated_at) backs the Demo Mode feature above; credit_payments and
-  user_credits back Site Credit above.
+  email, demo_mode, demo_balance_usd [now demo CASH — see Demo Mode
+  above], demo_asset/demo_asset_amount [unused legacy], updated_at) plus
+  demo_positions back Demo Mode above; credit_payments and user_credits
+  back Site Credit above.
 - Accessed server-side only via SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
   (Cloudflare env vars) in functions/admin-list.js, admin-update.js,
-  get-override.js, register-wallet.js, create-payment.js,
-  nowpayments-webhook.js, get-credit-balance.js, payment-status.js.
+  admin-reset-demo.js, get-override.js, register-wallet.js,
+  create-payment.js, nowpayments-webhook.js, get-credit-balance.js,
+  payment-status.js, demo-trade.js, get-demo-portfolio.js.
 - This repo is linked to the Supabase project (ref lehosxgqtcuwmqrwdgmu) —
   use `supabase migration new <name>` + `supabase db push` for schema
   changes, not one-off manual SQL.

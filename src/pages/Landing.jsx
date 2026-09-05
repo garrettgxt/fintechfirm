@@ -1,6 +1,15 @@
 import { Link } from "react-router-dom";
 import TickerStrip from "../components/TickerStrip.jsx";
 import PriceChart from "../components/PriceChart.jsx";
+import { useMarketQuotes } from "../hooks/useMarketQuotes.js";
+
+const HOMEPAGE_STOCKS = [
+  { symbol: "AAPL", name: "Apple" },
+  { symbol: "TSLA", name: "Tesla" },
+  { symbol: "NVDA", name: "Nvidia" },
+  { symbol: "NFLX", name: "Netflix" },
+];
+const HOMEPAGE_STOCK_SYMBOLS = HOMEPAGE_STOCKS.map((s) => s.symbol);
 
 const STEPS = [
   {
@@ -40,6 +49,8 @@ const FEATURES = [
 ];
 
 export default function Landing() {
+  const stockQuotes = useMarketQuotes(HOMEPAGE_STOCK_SYMBOLS);
+
   return (
     <div>
       <nav className="nav">
@@ -80,6 +91,27 @@ export default function Landing() {
           <div className="chart-grid">
             {["BTC", "ETH", "SOL", "LTC"].map((symbol) => (
               <PriceChart key={symbol} symbol={symbol} onBuy={() => (window.location.href = "/auth")} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="wrap">
+          <div className="section-head">
+            <h2 className="serif">The market's biggest names</h2>
+            <p>Track major stocks alongside crypto, all in one account.</p>
+          </div>
+          <div className="chart-grid">
+            {HOMEPAGE_STOCKS.map((s) => (
+              <PriceChart
+                key={s.symbol}
+                symbol={s.symbol}
+                name={s.name}
+                type="stock"
+                quote={stockQuotes[s.symbol]}
+                onBuy={() => (window.location.href = "/auth")}
+              />
             ))}
           </div>
         </div>
