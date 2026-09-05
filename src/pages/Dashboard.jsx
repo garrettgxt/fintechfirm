@@ -144,7 +144,7 @@ export default function Dashboard() {
           <div className="balance-card">
             <div>
               <div className="balance-label">
-                Total portfolio value
+                
                 {demoMode && (
                   <span style={{ marginLeft: 10, fontSize: 11, color: "var(--brass-bright)", border: "1px solid var(--brass)", borderRadius: 20, padding: "2px 8px" }}>
                     Total portfolio value
