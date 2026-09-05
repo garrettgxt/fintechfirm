@@ -3,6 +3,7 @@ import { usePrivy } from "@privy-io/react-auth";
 import Landing from "./pages/Landing.jsx";
 import Auth from "./pages/Auth.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
+import Admin from "./pages/Admin.jsx";
 
 function RequireAuth({ children }) {
   const { ready, authenticated } = usePrivy();
@@ -33,6 +34,9 @@ export default function App() {
           </RequireAuth>
         }
       />
+      {/* Not linked anywhere in the UI on purpose — reach it by typing
+          the URL directly. Its own password prompt is the real gate. */}
+      <Route path="/admin" element={<Admin />} />
     </Routes>
   );
 }

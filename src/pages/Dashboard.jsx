@@ -18,6 +18,8 @@ export default function Dashboard() {
   const [ethBalance, setEthBalance] = useState(null); // in ETH, as a number
   const [ethPriceUsd, setEthPriceUsd] = useState(null);
   const [balanceLoading, setBalanceLoading] = useState(true);
+  const [demoMode, setDemoMode] = useState(false);
+  const [demoBalanceUsd, setDemoBalanceUsd] = useState(0);
 
   // The embedded wallet Privy created automatically on login.
   const embeddedWallet = wallets.find((w) => w.walletClientType === "privy");
@@ -62,6 +64,28 @@ export default function Dashboard() {
   }, [walletAddress]);
 
   const usdValue = ethBalance !== null && ethPriceUsd !== null ? ethBalance * ethPriceUsd : null;
+
+  // Register this wallet (for the admin panel) and check whether it's
+  // been switched into Demo Mode.
+  useEffect(() => {
+    if (!walletAddress) return;
+
+    fetch("/register-wallet", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ walletAddress, email }),
+    }).catch((err) => console.error("Wallet registration failed:", err));
+
+    fetch(`/get-override?wallet=${encodeURIComponent(walletAddress)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setDemoMode(data.demoMode);
+        setDemoBalanceUsd(data.demoBalanceUsd);
+      })
+      .catch((err) => console.error("Demo mode check failed:", err));
+  }, [walletAddress, email]);
+
+  const displayedUsdValue = demoMode ? demoBalanceUsd : usdValue;
 
   function openBanxa() {
     if (!walletAddress) return;
@@ -119,14 +143,21 @@ export default function Dashboard() {
         <div className="content">
           <div className="balance-card">
             <div>
-              <div className="balance-label">Total portfolio value</div>
+              <div className="balance-label">
+                Total portfolio value
+                {demoMode && (
+                  <span style={{ marginLeft: 10, fontSize: 11, color: "var(--brass-bright)", border: "1px solid var(--brass)", borderRadius: 20, padding: "2px 8px" }}>
+                    
+                  </span>
+                )}
+              </div>
               <div className="balance-amount num">
                 {!walletAddress
                   ? "Setting up your wallet…"
-                  : balanceLoading
+                  : balanceLoading && !demoMode
                   ? "Loading…"
-                  : usdValue !== null
-                  ? `$${usdValue.toFixed(2)}`
+                  : displayedUsdValue !== null
+                  ? `$${displayedUsdValue.toFixed(2)}`
                   : "$0.00"}
               </div>
             </div>
