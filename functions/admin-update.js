@@ -23,7 +23,7 @@ export async function onRequest(context) {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), { status: 400 });
   }
 
-  const { walletAddress, demoMode, demoBalanceUsd } = body;
+  const { walletAddress, demoMode, demoBalanceUsd, demoAsset, demoAssetAmount } = body;
   if (!walletAddress) {
     return new Response(JSON.stringify({ error: "walletAddress is required" }), { status: 400 });
   }
@@ -41,6 +41,8 @@ export async function onRequest(context) {
       body: JSON.stringify({
         demo_mode: demoMode,
         demo_balance_usd: demoBalanceUsd,
+        demo_asset: demoAsset,
+        demo_asset_amount: demoAssetAmount,
         updated_at: new Date().toISOString(),
       }),
     }

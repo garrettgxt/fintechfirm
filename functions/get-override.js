@@ -20,7 +20,7 @@ export async function onRequest(context) {
   }
 
   const res = await fetch(
-    `${supabaseUrl}/rest/v1/wallet_overrides?wallet_address=eq.${encodeURIComponent(walletAddress)}&select=demo_mode,demo_balance_usd`,
+    `${supabaseUrl}/rest/v1/wallet_overrides?wallet_address=eq.${encodeURIComponent(walletAddress)}&select=demo_mode,demo_balance_usd,demo_asset,demo_asset_amount`,
     {
       headers: {
         apikey: serviceKey,
@@ -40,6 +40,8 @@ export async function onRequest(context) {
     JSON.stringify({
       demoMode: row?.demo_mode ?? false,
       demoBalanceUsd: row?.demo_balance_usd ?? 0,
+      demoAsset: row?.demo_asset ?? "ETH",
+      demoAssetAmount: row?.demo_asset_amount ?? 0,
     }),
     { status: 200, headers: { "Content-Type": "application/json" } }
   );

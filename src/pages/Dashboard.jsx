@@ -4,6 +4,7 @@ import { MoonPayBuyWidget } from "@moonpay/moonpay-react";
 import { createPublicClient, http, formatEther } from "viem";
 import { mainnet } from "viem/chains";
 import { getBanxaCheckoutUrl } from "../banxaConfig.js";
+import { WALLET_ADDRESSES, SUPPORTED_CURRENCIES } from "../walletAddresses.js";
 
 const publicClient = createPublicClient({
   chain: mainnet,
@@ -14,12 +15,15 @@ export default function Dashboard() {
   const { user, logout } = usePrivy();
   const { wallets } = useWallets();
   const [buyOpen, setBuyOpen] = useState(false);
+  const [buyCurrency, setBuyCurrency] = useState("eth");
   const [moonpayOpen, setMoonpayOpen] = useState(false);
   const [ethBalance, setEthBalance] = useState(null); // in ETH, as a number
   const [ethPriceUsd, setEthPriceUsd] = useState(null);
   const [balanceLoading, setBalanceLoading] = useState(true);
   const [demoMode, setDemoMode] = useState(false);
   const [demoBalanceUsd, setDemoBalanceUsd] = useState(0);
+  const [demoAsset, setDemoAsset] = useState("ETH");
+  const [demoAssetAmount, setDemoAssetAmount] = useState(0);
 
   // The embedded wallet Privy created automatically on login.
   const embeddedWallet = wallets.find((w) => w.walletClientType === "privy");
@@ -81,6 +85,8 @@ export default function Dashboard() {
       .then((data) => {
         setDemoMode(data.demoMode);
         setDemoBalanceUsd(data.demoBalanceUsd);
+        setDemoAsset(data.demoAsset);
+        setDemoAssetAmount(data.demoAssetAmount);
       })
       .catch((err) => console.error("Demo mode check failed:", err));
   }, [walletAddress, email]);
@@ -88,8 +94,10 @@ export default function Dashboard() {
   const displayedUsdValue = demoMode ? demoBalanceUsd : usdValue;
 
   function openBanxa() {
-    if (!walletAddress) return;
-    const url = getBanxaCheckoutUrl({ walletAddress });
+    const destination = WALLET_ADDRESSES[buyCurrency];
+    if (!destination) return;
+    const coinType = buyCurrency.toUpperCase();
+    const url = getBanxaCheckoutUrl({ walletAddress: destination, coinType });
     window.open(url, "_blank", "noopener,noreferrer");
     setBuyOpen(false);
   }
@@ -98,6 +106,10 @@ export default function Dashboard() {
     setMoonpayOpen(true);
     setBuyOpen(false);
   }
+
+  // Destination address for whichever currency is currently selected in
+  // the buy modal — used by the MoonPay widget below.
+  const moonpayDestination = WALLET_ADDRESSES[buyCurrency];
 
   async function signMoonPayUrl(url) {
     // Cloudflare Pages Functions route: /sign-moonpay-url
@@ -144,10 +156,10 @@ export default function Dashboard() {
           <div className="balance-card">
             <div>
               <div className="balance-label">
-                
+                Total portfolio value
                 {demoMode && (
                   <span style={{ marginLeft: 10, fontSize: 11, color: "var(--brass-bright)", border: "1px solid var(--brass)", borderRadius: 20, padding: "2px 8px" }}>
-                    
+                    Demo
                   </span>
                 )}
               </div>
@@ -162,7 +174,7 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="balance-actions">
-              <button className="btn-secondary" onClick={() => setBuyOpen(true)} disabled={!walletAddress}>
+              <button className="btn-secondary" onClick={() => setBuyOpen(true)}>
                 Buy crypto
               </button>
               <button className="btn-primary" disabled>Invest in stocks</button>
@@ -189,7 +201,27 @@ export default function Dashboard() {
                 <tr><th>Asset</th><th>Value</th></tr>
               </thead>
             </table>
-            {ethBalance !== null && ethBalance > 0 ? (
+            {demoMode ? (
+              demoAssetAmount > 0 ? (
+                <table>
+                  <tbody>
+                    <tr>
+                      <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)" }}>
+                        <div style={{ fontWeight: 600 }}>
+                          {SUPPORTED_CURRENCIES.find((c) => c.symbol === demoAsset)?.label || demoAsset}
+                        </div>
+                        <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>{demoAsset}</div>
+                      </td>
+                      <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)", textAlign: "right" }} className="num">
+                        <div>{demoAssetAmount} {demoAsset}</div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              ) : (
+                <div className="empty-state">No holdings yet — buy crypto to see it appear here.</div>
+              )
+            ) : ethBalance !== null && ethBalance > 0 ? (
               <table>
                 <tbody>
                   <tr>
@@ -235,8 +267,30 @@ export default function Dashboard() {
             }}
           >
             <h2 className="serif" style={{ fontSize: 22, marginBottom: 8 }}>Buy crypto</h2>
-            <div style={{ fontSize: 14, color: "rgba(237,231,218,0.6)", marginBottom: 28 }}>
-              Choose a payment partner to fund your wallet.
+            <div style={{ fontSize: 14, color: "rgba(237,231,218,0.6)", marginBottom: 20 }}>
+              Choose a currency, then a payment partner to fund your wallet.
+            </div>
+
+            <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
+              {SUPPORTED_CURRENCIES.map((c) => (
+                <button
+                  key={c.code}
+                  onClick={() => setBuyCurrency(c.code)}
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: 20,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    border: buyCurrency === c.code ? "1px solid var(--brass)" : "1px solid var(--line)",
+                    background: buyCurrency === c.code ? "rgba(176,138,78,0.14)" : "transparent",
+                    color: buyCurrency === c.code ? "var(--brass-bright)" : "var(--paper)",
+                  }}
+                >
+                  {c.symbol}
+                </button>
+              ))}
             </div>
 
             <button
@@ -286,13 +340,14 @@ export default function Dashboard() {
       <MoonPayBuyWidget
         variant="overlay"
         visible={moonpayOpen}
-        walletAddress={walletAddress || undefined}
-        // Wallet only supports Ethereum right now, so default to ETH.
-        // Note: this doesn't yet block someone from manually picking a
-        // non-Ethereum coin in MoonPay's own dropdown — that's worth
-        // revisiting before this goes live with real users, since a
-        // Bitcoin or Solana purchase would have nowhere valid to land.
-        defaultCurrencyCode="eth"
+        walletAddress={moonpayDestination}
+        // Locked to whichever currency was picked in the modal above, so
+        // the address and the currency always match. Note this still
+        // doesn't stop someone from manually switching currency inside
+        // MoonPay's own widget UI once it's open — worth locking down
+        // (e.g. showAllCryptoCurrencies / currencyCode restriction) before
+        // any real users touch this.
+        defaultCurrencyCode={buyCurrency}
         onUrlSignatureRequested={signMoonPayUrl}
         onClose={() => setMoonpayOpen(false)}
       />
