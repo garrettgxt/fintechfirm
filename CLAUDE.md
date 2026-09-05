@@ -72,6 +72,19 @@
   trading touch a real account's Site Credit — functions/demo-trade.js
   and the `apply_demo_trade` Postgres function both hard-require
   `wallet_overrides.demo_mode = true` before doing anything.
+- functions/demo-trade.js trusts the PRICE THE CLIENT SENDS, not a fresh
+  server-side fetch — deliberately, and only acceptable because of the
+  demo_mode gate above. Binance's API (fronted by CloudFront) returns a
+  403 "Request blocked" specifically to Cloudflare Workers' own outbound
+  IPs — confirmed in production testing: the exact same request that
+  works fine from a browser (PriceChart.jsx's chart data) fails from a
+  Cloudflare Function. So a server-side price fetch isn't reliably
+  possible here; trusting the already-displayed quote means the worst
+  case is a demo user giving themselves a slightly favorable price in
+  their own play-money portfolio — never a real one. Keep this in mind
+  for any FUTURE feature that needs a server-side Binance call — it may
+  hit the same block; CoinGecko/Coinbase's REST APIs weren't tested for
+  the same issue and may or may not have it too.
 - Admin panel at /admin (password-gated via ADMIN_PASSWORD, not linked in
   site nav) now just toggles demo_mode and sets the demo cash balance
   (`wallet_overrides.demo_balance_usd`, repurposed — see below), plus a

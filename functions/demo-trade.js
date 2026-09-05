@@ -5,9 +5,16 @@
 // that has demo_mode = true (enforced by apply_demo_trade in Postgres,
 // not just here) so a real account's Site Credit is never at risk.
 //
-// The price used is always fetched fresh, server-side, right before the
-// trade — never trusted from the client — so nobody can submit a
-// favorable fake price.
+// The price comes from the client, not a fresh server-side fetch —
+// deliberately. Binance's API (which chart/price data already uses) is
+// fronted by CloudFront and returns a 403 "Request blocked" to Cloudflare
+// Workers' own outbound IPs specifically (confirmed in production
+// testing — browser calls to Binance work fine, server-side ones don't),
+// so re-fetching a price here isn't reliably possible. Trusting the
+// client's already-displayed quote is an acceptable tradeoff ONLY because
+// this never touches real money: apply_demo_trade hard-requires
+// demo_mode = true, so the worst case is a demo user giving themselves a
+// slightly favorable price in their own play-money portfolio.
 
 export async function onRequest(context) {
   if (context.request.method !== "POST") {
@@ -27,39 +34,26 @@ export async function onRequest(context) {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), { status: 400 });
   }
 
-  const { walletAddress, symbol, assetType, side, quantity } = body;
+  const { walletAddress, symbol, assetType, side, quantity, price } = body;
   const qty = Number(quantity);
-  if (!walletAddress || !symbol || !assetType || !["buy", "sell"].includes(side) || !Number.isFinite(qty) || qty <= 0) {
-    return new Response(JSON.stringify({ error: "walletAddress, symbol, assetType, side, and a positive quantity are required" }), {
-      status: 400,
-    });
+  const px = Number(price);
+  if (
+    !walletAddress ||
+    !symbol ||
+    !assetType ||
+    !["buy", "sell"].includes(side) ||
+    !Number.isFinite(qty) ||
+    qty <= 0 ||
+    !Number.isFinite(px) ||
+    px <= 0
+  ) {
+    return new Response(
+      JSON.stringify({ error: "walletAddress, symbol, assetType, side, and positive quantity/price are required" }),
+      { status: 400 }
+    );
   }
 
   try {
-    let price;
-    if (assetType === "crypto") {
-      const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${encodeURIComponent(symbol)}USDT`);
-      if (!res.ok) {
-        const errText = await res.text();
-        return new Response(JSON.stringify({ error: `Failed to fetch crypto price: HTTP ${res.status} ${errText}` }), { status: 502 });
-      }
-      const data = await res.json();
-      price = parseFloat(data.price);
-    } else {
-      const apiKey = context.env.TWELVE_DATA_API_KEY;
-      if (!apiKey) {
-        return new Response(JSON.stringify({ error: "Market data provider not configured" }), { status: 500 });
-      }
-      const res = await fetch(`https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbol)}&apikey=${apiKey}`);
-      if (!res.ok) return new Response(JSON.stringify({ error: "Failed to fetch market price" }), { status: 502 });
-      const data = await res.json();
-      price = parseFloat(data.close);
-    }
-
-    if (!Number.isFinite(price) || price <= 0) {
-      return new Response(JSON.stringify({ error: "Could not determine a current price for this symbol" }), { status: 502 });
-    }
-
     const rpcRes = await fetch(`${supabaseUrl}/rest/v1/rpc/apply_demo_trade`, {
       method: "POST",
       headers: {
@@ -73,7 +67,7 @@ export async function onRequest(context) {
         p_asset_type: assetType,
         p_side: side,
         p_quantity: qty,
-        p_price: price,
+        p_price: px,
       }),
     });
 
@@ -88,7 +82,7 @@ export async function onRequest(context) {
     }
 
     const result = await rpcRes.json();
-    return new Response(JSON.stringify({ ok: true, price, cashUsd: result.cashUsd }), {
+    return new Response(JSON.stringify({ ok: true, price: px, cashUsd: result.cashUsd }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });

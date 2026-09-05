@@ -30,14 +30,14 @@ export default function TradeModal({
   const overHolding = side === "sell" && Number.isFinite(qty) && qty > holdingQuantity;
 
   async function submit() {
-    if (!Number.isFinite(qty) || qty <= 0 || overBudget || overHolding) return;
+    if (!Number.isFinite(qty) || qty <= 0 || overBudget || overHolding || price == null) return;
     setSubmitting(true);
     setError("");
     try {
       const res = await fetch("/demo-trade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ walletAddress, symbol, assetType, side, quantity: qty }),
+        body: JSON.stringify({ walletAddress, symbol, assetType, side, quantity: qty, price }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Trade failed");
@@ -144,12 +144,17 @@ export default function TradeModal({
             {error && (
               <div style={{ fontSize: 12.5, color: "var(--rust)", marginBottom: 12 }}>{error}</div>
             )}
+            {price == null && (
+              <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)", marginBottom: 12 }}>
+                Waiting for a live price before this can be placed…
+              </div>
+            )}
 
             <button
               className="btn-primary"
               style={{ width: "100%" }}
               onClick={submit}
-              disabled={submitting || !Number.isFinite(qty) || qty <= 0 || overBudget || overHolding}
+              disabled={submitting || !Number.isFinite(qty) || qty <= 0 || overBudget || overHolding || price == null}
             >
               {submitting ? "Placing order…" : side === "buy" ? "Buy (demo)" : "Sell (demo)"}
             </button>
