@@ -98,3 +98,62 @@ td{ padding:16px 28px; border-top:1px solid var(--line); font-size:14.5px; }
 
 footer{ border-top:1px solid var(--line); padding:40px 0; }
 footer .fine{ font-size:12.5px; color:rgba(237,231,218,0.4); max-width:640px; line-height:1.6; }
+
+/* Hero + live ticker */
+.hero{ padding:88px 0 56px; background: radial-gradient(circle at 12% 0%, rgba(176,138,78,0.10), transparent 45%), radial-gradient(circle at 90% 20%, rgba(92,143,114,0.08), transparent 45%); }
+.hero .wrap + .wrap{ margin-top:56px; }
+
+.ticker-strip{ display:flex; gap:14px; flex-wrap:wrap; padding:20px 24px; background:var(--ink-2); border:1px solid var(--line); border-radius:8px; }
+.ticker-item{ flex:1; min-width:150px; display:flex; align-items:center; gap:12px; padding:4px 14px; border-right:1px solid var(--line); }
+.ticker-item:last-child{ border-right:none; }
+@media (max-width:720px){ .ticker-item{ border-right:none; border-bottom:1px solid var(--line); padding-bottom:14px; } }
+.ticker-symbol{ font-family:'Fraunces',serif; font-size:15px; font-weight:500; width:34px; flex-shrink:0; }
+.ticker-price{ font-size:14px; flex-shrink:0; min-width:78px; }
+.ticker-change{ font-size:12.5px; font-weight:600; margin-left:auto; }
+
+/* Content sections */
+.section{ padding:72px 0; border-top:1px solid var(--line); }
+.section-head{ margin-bottom:36px; max-width:520px; }
+.section-head h2{ font-size:clamp(24px,3vw,32px); margin-bottom:10px; }
+.section-head p{ color:rgba(237,231,218,0.6); font-size:15px; }
+
+/* Chart cards (homepage + dashboard Markets tab) */
+.chart-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:20px; }
+@media (max-width:780px){ .chart-grid{ grid-template-columns:1fr; } }
+.chart-card{ background:var(--ink-2); border:1px solid var(--line); border-radius:8px; padding:24px; }
+.chart-card-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px; }
+.chart-card-title{ font-family:'Fraunces',serif; font-size:16px; }
+.chart-card-symbol{ font-family:'Inter',sans-serif; font-size:12px; color:rgba(237,231,218,0.45); font-weight:500; }
+.chart-card-price{ font-size:22px; margin-top:6px; display:flex; align-items:baseline; gap:10px; }
+.chart-card-change{ font-size:13px; font-weight:600; }
+.chart-buy-btn{ padding:9px 18px; font-size:13.5px; flex-shrink:0; }
+.chart-range-toggle{ display:flex; gap:4px; margin-bottom:8px; }
+.chart-range-toggle button{ background:none; border:none; color:rgba(237,231,218,0.45); font-size:12px; font-weight:600; padding:4px 9px; border-radius:4px; cursor:pointer; font-family:inherit; }
+.chart-range-toggle button.active{ background:rgba(176,138,78,0.14); color:var(--brass-bright); }
+.chart-range-toggle button:hover:not(.active){ color:var(--paper); }
+.chart-canvas{ width:100%; }
+
+/* How it works */
+.steps-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:24px; }
+@media (max-width:780px){ .steps-grid{ grid-template-columns:1fr; } }
+.step-card{ background:var(--ink-2); border:1px solid var(--line); border-radius:8px; padding:28px; }
+.step-n{ font-family:'Fraunces',serif; font-size:26px; color:var(--brass); margin-bottom:14px; }
+.step-card p{ font-size:14px; color:rgba(237,231,218,0.6); line-height:1.65; }
+
+/* Feature grid */
+.feature-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:24px; }
+@media (max-width:920px){ .feature-grid{ grid-template-columns:repeat(2,1fr); } }
+@media (max-width:560px){ .feature-grid{ grid-template-columns:1fr; } }
+.feature-card p{ font-size:13.5px; color:rgba(237,231,218,0.6); line-height:1.6; }
+
+.cta-section{ background:var(--ink-2); }
+
+/* Live-updating wallet balance */
+.balance-delta{ font-size:14px; font-weight:600; margin-left:12px; transition:opacity .4s ease; }
+.balance-delta.up{ color:var(--sage); }
+.balance-delta.down{ color:var(--rust); }
+.holdings-row-change{ font-size:12.5px; font-weight:600; margin-top:2px; }
+
+/* Dashboard sidebar tabs (now functional) */
+.markets-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:20px; }
+@media (max-width:780px){ .markets-grid{ grid-template-columns:1fr; } }

@@ -1,10 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { MoonPayBuyWidget } from "@moonpay/moonpay-react";
 import { createPublicClient, http, formatEther } from "viem";
 import { mainnet } from "viem/chains";
 import { getBanxaCheckoutUrl } from "../banxaConfig.js";
 import { WALLET_ADDRESSES, SUPPORTED_CURRENCIES } from "../walletAddresses.js";
+import { useLivePrices } from "../hooks/useLivePrices.js";
+import PriceChart from "../components/PriceChart.jsx";
+import Sparkline from "../components/Sparkline.jsx";
 
 const publicClient = createPublicClient({
   chain: mainnet,
@@ -29,6 +32,12 @@ export default function Dashboard() {
   const [demoAsset, setDemoAsset] = useState("ETH");
   const [demoAssetAmount, setDemoAssetAmount] = useState(0); // dollar value of the demo holding
   const [assetPrices, setAssetPrices] = useState({}); // { ETH: 3450.12, BTC: ..., LTC: ..., SOL: ... }
+  const [demoQuantity, setDemoQuantity] = useState(null); // coin quantity, frozen once at load so it behaves like a real holding
+  const [tab, setTab] = useState("portfolio");
+  const [balanceDelta, setBalanceDelta] = useState(null); // { amount, direction } — a brief "+$0.03" flash
+  const prevDisplayedValue = useRef(null);
+  const deltaTimeout = useRef(null);
+  const livePrices = useLivePrices();
 
   // The embedded wallet Privy created automatically on login.
   const embeddedWallet = wallets.find((w) => w.walletClientType === "privy");
@@ -113,16 +122,44 @@ export default function Dashboard() {
       .catch((err) => console.error("Demo mode check failed:", err));
   }, [walletAddress, email]);
 
-  const displayedUsdValue = demoMode ? demoBalanceUsd : usdValue;
+  // Freeze the demo holding's coin quantity the first time we can compute
+  // it, so it behaves like a real holding from then on: the quantity of
+  // coins stays fixed, and its dollar value moves with the live price —
+  // instead of the dollar value being pinned to a static admin-set number.
+  useEffect(() => {
+    if (!demoMode || demoQuantity !== null) return;
+    const price = assetPrices[demoAsset];
+    if (price) setDemoQuantity(demoAssetAmount / price);
+  }, [demoMode, demoAsset, demoAssetAmount, assetPrices, demoQuantity]);
 
   // Whichever asset + quantity is currently relevant to show the user —
   // the demo holding if Demo Mode is on, otherwise their real ETH balance.
   const displayAsset = demoMode ? demoAsset : "ETH";
-  const displayQuantity = demoMode
-    ? assetPrices[demoAsset]
-      ? demoAssetAmount / assetPrices[demoAsset]
-      : null
-    : ethBalance;
+  const displayQuantity = demoMode ? demoQuantity : ethBalance;
+
+  // Prefer the live streaming price for whichever asset is being shown, so
+  // the balance ticks in real time; fall back to the slower-polled price
+  // (or the admin's static demo figure) until the first live tick arrives.
+  const liveAssetPrice = livePrices[displayAsset]?.price;
+  const liveUsdValue =
+    displayQuantity != null && liveAssetPrice != null ? displayQuantity * liveAssetPrice : null;
+  const displayedUsdValue = liveUsdValue ?? (demoMode ? demoBalanceUsd : usdValue);
+
+  // Flash a "+$0.03" / "-$0.05" badge next to the balance whenever it moves.
+  useEffect(() => {
+    if (displayedUsdValue == null) return;
+    const prev = prevDisplayedValue.current;
+    prevDisplayedValue.current = displayedUsdValue;
+    if (prev == null) return;
+    const amount = displayedUsdValue - prev;
+    if (Math.abs(amount) < 0.005) return;
+
+    setBalanceDelta({ amount, direction: amount >= 0 ? "up" : "down" });
+    clearTimeout(deltaTimeout.current);
+    deltaTimeout.current = setTimeout(() => setBalanceDelta(null), 2500);
+  }, [displayedUsdValue]);
+
+  useEffect(() => () => clearTimeout(deltaTimeout.current), []);
 
   function openBanxa() {
     const destination = WALLET_ADDRESSES[buyCurrency];
@@ -138,10 +175,16 @@ export default function Dashboard() {
     setBuyOpen(false);
   }
 
+  // Used by a chart card's "Buy" button on the Markets tab — preselects
+  // that coin and opens the same provider-choice modal as the sidebar's
+  // "Buy crypto" button.
+  function openBuyFor(symbol) {
+    setBuyCurrency(symbol.toLowerCase());
+    setBuyOpen(true);
+  }
+
   async function signMoonPayUrl(url) {
     // Cloudflare Pages Functions route: /sign-moonpay-url
-    // (If deploying to Netlify instead, change this back to
-    // "/.netlify/functions/sign-moonpay-url")
     const response = await fetch(`/sign-moonpay-url?url=${encodeURIComponent(url)}`);
     const data = await response.json();
     if (!response.ok) {
@@ -157,10 +200,15 @@ export default function Dashboard() {
         <div>
           <a href="/" className="brand"><span className="brand-mark"></span>Coinstate Capital</a>
           <nav className="side-nav">
-            <button className="active">◆ Portfolio</button>
+            <button className={tab === "portfolio" ? "active" : ""} onClick={() => setTab("portfolio")}>
+              ◆ Portfolio
+            </button>
+            <button className={tab === "markets" ? "active" : ""} onClick={() => setTab("markets")}>
+              ↗ Markets
+            </button>
             <button onClick={() => setBuyOpen(true)}>＋ Buy crypto</button>
-            <button>↗ Invest in stocks</button>
-            <button>⚙ Settings</button>
+            <button disabled title="Coming soon">↗ Invest in stocks</button>
+            <button disabled title="Coming soon">⚙ Settings</button>
           </nav>
         </div>
         <div className="side-foot">
@@ -172,119 +220,162 @@ export default function Dashboard() {
 
       <div className="main">
         <div className="topbar">
-          <h1 className="serif" style={{ fontSize: 20 }}>Portfolio</h1>
+          <h1 className="serif" style={{ fontSize: 20 }}>{tab === "markets" ? "Markets" : "Portfolio"}</h1>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             <span style={{ fontSize: 13.5, color: "rgba(237,231,218,0.6)" }}>{email}</span>
             <button className="btn-secondary" onClick={logout}>Log out</button>
           </div>
         </div>
 
-        <div className="content">
-          <div className="balance-card">
-            <div>
-              <div className="balance-label">
-                Total portfolio value
-                {demoMode && (
-                  <span style={{ marginLeft: 10, fontSize: 11, color: "var(--brass-bright)" }}>
-                    Demo
-                  </span>
-                )}
-              </div>
-              <div className="balance-amount num">
-                {!walletAddress
-                  ? "Setting up your wallet…"
-                  : balanceLoading && !demoMode
-                  ? "Loading…"
-                  : displayedUsdValue !== null
-                  ? `$${displayedUsdValue.toFixed(2)}`
-                  : "$0.00"}
-              </div>
-            </div>
-            <div className="balance-actions">
-              <button className="btn-secondary" onClick={() => setBuyOpen(true)}>
-                Buy crypto
-              </button>
-              <button className="btn-primary" disabled>Invest in stocks</button>
+        {tab === "markets" ? (
+          <div className="content">
+            <div className="markets-grid">
+              {SUPPORTED_CURRENCIES.map((c) => (
+                <PriceChart key={c.symbol} symbol={c.symbol} onBuy={openBuyFor} />
+              ))}
             </div>
           </div>
-
-          <div className="panel">
-            <h3>Your wallet</h3>
-            {walletAddress ? (
-              <>
-                <span className="status-pill healthy">Ready to receive funds</span>
-                <div className="wallet-address num">
-                  {displayQuantity !== null
-                    ? `${displayQuantity.toFixed(5)} ${displayAsset}`
-                    : "Loading…"}
+        ) : (
+          <div className="content">
+            <div className="balance-card">
+              <div>
+                <div className="balance-label">
+                  Total portfolio value
+                  {demoMode && (
+                    <span style={{ marginLeft: 10, fontSize: 11, color: "var(--brass-bright)" }}>
+                      Demo
+                    </span>
+                  )}
                 </div>
-              </>
-            ) : (
-              <div style={{ fontSize: 14, color: "rgba(237,231,218,0.5)" }}>
-                Creating your secure wallet — this usually takes a few seconds.
+                <div className="balance-amount num" style={{ display: "flex", alignItems: "baseline" }}>
+                  {!walletAddress
+                    ? "Setting up your wallet…"
+                    : balanceLoading && !demoMode
+                    ? "Loading…"
+                    : displayedUsdValue !== null
+                    ? `$${displayedUsdValue.toFixed(2)}`
+                    : "$0.00"}
+                  {balanceDelta && (
+                    <span className={`balance-delta ${balanceDelta.direction}`}>
+                      {balanceDelta.direction === "up" ? "+" : "-"}${Math.abs(balanceDelta.amount).toFixed(2)}
+                    </span>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
+              <div className="balance-actions">
+                <button className="btn-secondary" onClick={() => setBuyOpen(true)}>
+                  Buy crypto
+                </button>
+                <button className="btn-primary" disabled>Invest in stocks</button>
+              </div>
+            </div>
 
-          <div className="holdings-panel">
-            <table>
-              <thead>
-                <tr><th>Asset</th><th>Value</th></tr>
-              </thead>
-            </table>
-            {demoMode ? (
-              demoAssetAmount > 0 ? (
+            <div className="panel">
+              <h3>Your wallet</h3>
+              {walletAddress ? (
+                <>
+                  <span className="status-pill healthy">Ready to receive funds</span>
+                  <div className="wallet-address num">
+                    {displayQuantity !== null
+                      ? `${displayQuantity.toFixed(5)} ${displayAsset}`
+                      : "Loading…"}
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize: 14, color: "rgba(237,231,218,0.5)" }}>
+                  Creating your secure wallet — this usually takes a few seconds.
+                </div>
+              )}
+            </div>
+
+            <div className="holdings-panel">
+              <table>
+                <thead>
+                  <tr><th>Asset</th><th></th><th>Value</th></tr>
+                </thead>
+              </table>
+              {demoMode ? (
+                demoAssetAmount > 0 ? (
+                  <table>
+                    <tbody>
+                      <tr>
+                        <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)" }}>
+                          <div style={{ fontWeight: 600 }}>
+                            {SUPPORTED_CURRENCIES.find((c) => c.symbol === demoAsset)?.label || demoAsset}
+                          </div>
+                          <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>{demoAsset}</div>
+                        </td>
+                        <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)" }}>
+                          <Sparkline
+                            history={livePrices[demoAsset]?.history}
+                            isUp={(livePrices[demoAsset]?.changePct24h ?? 0) >= 0}
+                          />
+                        </td>
+                        <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)", textAlign: "right" }} className="num">
+                          <div>
+                            {demoQuantity !== null ? `${demoQuantity.toFixed(5)} ${demoAsset}` : "Loading price…"}
+                          </div>
+                          <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>
+                            {liveUsdValue !== null ? `$${liveUsdValue.toFixed(2)}` : `$${demoAssetAmount.toFixed(2)}`}
+                          </div>
+                          {livePrices[demoAsset]?.changePct24h != null && (
+                            <div
+                              className="holdings-row-change"
+                              style={{ color: livePrices[demoAsset].changePct24h >= 0 ? "var(--sage)" : "var(--rust)" }}
+                            >
+                              {livePrices[demoAsset].changePct24h >= 0 ? "+" : ""}
+                              {livePrices[demoAsset].changePct24h.toFixed(2)}%
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="empty-state">No holdings yet — buy crypto to see it appear here.</div>
+                )
+              ) : ethBalance !== null && ethBalance > 0 ? (
                 <table>
                   <tbody>
                     <tr>
                       <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)" }}>
-                        <div style={{ fontWeight: 600 }}>
-                          {SUPPORTED_CURRENCIES.find((c) => c.symbol === demoAsset)?.label || demoAsset}
-                        </div>
-                        <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>{demoAsset}</div>
+                        <div style={{ fontWeight: 600 }}>Ethereum</div>
+                        <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>ETH</div>
+                      </td>
+                      <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)" }}>
+                        <Sparkline
+                          history={livePrices.ETH?.history}
+                          isUp={(livePrices.ETH?.changePct24h ?? 0) >= 0}
+                        />
                       </td>
                       <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)", textAlign: "right" }} className="num">
-                        <div>
-                          {assetPrices[demoAsset]
-                            ? `${(demoAssetAmount / assetPrices[demoAsset]).toFixed(5)} ${demoAsset}`
-                            : "Loading price…"}
-                        </div>
-                        <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>
-                          ${demoAssetAmount.toFixed(2)}
-                        </div>
+                        <div>{ethBalance.toFixed(5)} ETH</div>
+                        {(liveUsdValue ?? usdValue) !== null && (
+                          <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>
+                            ${(liveUsdValue ?? usdValue).toFixed(2)}
+                          </div>
+                        )}
+                        {livePrices.ETH?.changePct24h != null && (
+                          <div
+                            className="holdings-row-change"
+                            style={{ color: livePrices.ETH.changePct24h >= 0 ? "var(--sage)" : "var(--rust)" }}
+                          >
+                            {livePrices.ETH.changePct24h >= 0 ? "+" : ""}
+                            {livePrices.ETH.changePct24h.toFixed(2)}%
+                          </div>
+                        )}
                       </td>
                     </tr>
                   </tbody>
                 </table>
               ) : (
-                <div className="empty-state">No holdings yet — buy crypto to see it appear here.</div>
-              )
-            ) : ethBalance !== null && ethBalance > 0 ? (
-              <table>
-                <tbody>
-                  <tr>
-                    <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)" }}>
-                      <div style={{ fontWeight: 600 }}>Ethereum</div>
-                      <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>ETH</div>
-                    </td>
-                    <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)", textAlign: "right" }} className="num">
-                      <div>{ethBalance.toFixed(5)} ETH</div>
-                      {usdValue !== null && (
-                        <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>
-                          ${usdValue.toFixed(2)}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            ) : (
-              <div className="empty-state">
-                {balanceLoading ? "Checking your balance…" : "No holdings yet — buy crypto to see it appear here."}
-              </div>
-            )}
+                <div className="empty-state">
+                  {balanceLoading ? "Checking your balance…" : "No holdings yet — buy crypto to see it appear here."}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Provider choice modal */}
