@@ -11,6 +11,13 @@ export async function onRequest(context) {
   const providedPassword = context.request.headers.get("x-admin-password");
   const realPassword = context.env.ADMIN_PASSWORD;
 
+  // TEMPORARY DEBUG — logs lengths only, never the actual password values.
+  console.log(
+    `DEBUG: provided length=${providedPassword?.length ?? "none"}, ` +
+    `expected length=${realPassword?.length ?? "none"}, ` +
+    `expected defined=${!!realPassword}, match=${providedPassword === realPassword}`
+  );
+
   if (!realPassword || providedPassword !== realPassword) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
   }
