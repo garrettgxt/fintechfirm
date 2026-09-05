@@ -9,11 +9,15 @@
 // (matches the file path, no extra config needed)
 //
 // SETUP (in the Cloudflare dashboard, not in this file):
-//   Pages project > Settings > Environment variables > add:
-//     MOONPAY_SECRET_KEY = sk_test_... (from MoonPay dashboard > Developers > API Keys)
+//   1. Pages project > Settings > Environment variables > add:
+//      MOONPAY_SECRET_KEY = sk_test_... (from MoonPay dashboard > Developers > API Keys)
+//   2. Pages project > Settings > Runtime > Compatibility flags > add: nodejs_compat
+//      (required for this file's use of Node's crypto module)
 //
 // Never paste the secret key directly into this file — always set it as an
 // environment variable in Cloudflare's dashboard.
+
+import crypto from "node:crypto";
 
 export async function onRequest(context) {
   const url = new URL(context.request.url);
@@ -37,7 +41,12 @@ export async function onRequest(context) {
   }
 
   try {
-    const signature = await signWithHmacSha256(secretKey, new URL(targetUrl).search);
+    // This matches MoonPay's own documented example exactly:
+    // https://dev.moonpay.com/docs/swaps-widget-how-to-enhance-security-using-signed-urls
+    const signature = crypto
+      .createHmac("sha256", secretKey)
+      .update(new URL(targetUrl).search)
+      .digest("base64");
 
     return new Response(JSON.stringify({ signature }), {
       status: 200,
@@ -49,19 +58,4 @@ export async function onRequest(context) {
       headers: { "Content-Type": "application/json" },
     });
   }
-}
-
-// Cloudflare Workers don't have Node's `crypto` module, so this uses the
-// standard Web Crypto API instead (built into every modern JS runtime).
-async function signWithHmacSha256(secretKey, message) {
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secretKey),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const signatureBuffer = await crypto.subtle.sign("HMAC", key, encoder.encode(message));
-  return btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)));
 }
