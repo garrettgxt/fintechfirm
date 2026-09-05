@@ -124,7 +124,7 @@ function WalletRow({ wallet, onUpdate }) {
         </div>
 
         <div>
-          <div style={{ fontSize: 11.5, color: "rgba(237,231,218,0.45)", marginBottom: 4 }}>Amount held</div>
+          <div style={{ fontSize: 11.5, color: "rgba(237,231,218,0.45)", marginBottom: 4 }}>Value of holding (USD)</div>
           <input
             type="number"
             step="any"

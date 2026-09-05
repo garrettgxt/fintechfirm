@@ -11,6 +11,10 @@ const publicClient = createPublicClient({
   transport: http(), // uses a public Ethereum RPC endpoint, no API key needed
 });
 
+// CoinGecko ids for each symbol we support, used to convert a demo dollar
+// value into a plausible coin quantity to display.
+const COINGECKO_IDS = { ETH: "ethereum", BTC: "bitcoin", LTC: "litecoin", SOL: "solana" };
+
 export default function Dashboard() {
   const { user, logout } = usePrivy();
   const { wallets } = useWallets();
@@ -23,7 +27,8 @@ export default function Dashboard() {
   const [demoMode, setDemoMode] = useState(false);
   const [demoBalanceUsd, setDemoBalanceUsd] = useState(0);
   const [demoAsset, setDemoAsset] = useState("ETH");
-  const [demoAssetAmount, setDemoAssetAmount] = useState(0);
+  const [demoAssetAmount, setDemoAssetAmount] = useState(0); // dollar value of the demo holding
+  const [assetPrices, setAssetPrices] = useState({}); // { ETH: 3450.12, BTC: ..., LTC: ..., SOL: ... }
 
   // The embedded wallet Privy created automatically on login.
   const embeddedWallet = wallets.find((w) => w.walletClientType === "privy");
@@ -68,6 +73,23 @@ export default function Dashboard() {
   }, [walletAddress]);
 
   const usdValue = ethBalance !== null && ethPriceUsd !== null ? ethBalance * ethPriceUsd : null;
+
+  // Fetch a live USD price for every asset we support (not just ETH), so a
+  // demo holding set in dollars can be shown as a coin quantity, the same
+  // way the real ETH row shows quantity + USD.
+  useEffect(() => {
+    const ids = Object.values(COINGECKO_IDS).join(",");
+    fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`)
+      .then((res) => res.json())
+      .then((data) => {
+        const prices = {};
+        for (const [symbol, id] of Object.entries(COINGECKO_IDS)) {
+          prices[symbol] = data?.[id]?.usd ?? null;
+        }
+        setAssetPrices(prices);
+      })
+      .catch((err) => console.error("Failed to fetch asset prices:", err));
+  }, []);
 
   // Register this wallet (for the admin panel) and check whether it's
   // been switched into Demo Mode.
@@ -159,7 +181,7 @@ export default function Dashboard() {
                 Total portfolio value
                 {demoMode && (
                   <span style={{ marginLeft: 10, fontSize: 11, color: "var(--brass-bright)" }}>
-                    
+                    Demo
                   </span>
                 )}
               </div>
@@ -213,7 +235,14 @@ export default function Dashboard() {
                         <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>{demoAsset}</div>
                       </td>
                       <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)", textAlign: "right" }} className="num">
-                        <div>{demoAssetAmount} {demoAsset}</div>
+                        <div>
+                          {assetPrices[demoAsset]
+                            ? `${(demoAssetAmount / assetPrices[demoAsset]).toFixed(5)} ${demoAsset}`
+                            : "Loading price…"}
+                        </div>
+                        <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>
+                          ${demoAssetAmount.toFixed(2)}
+                        </div>
                       </td>
                     </tr>
                   </tbody>
