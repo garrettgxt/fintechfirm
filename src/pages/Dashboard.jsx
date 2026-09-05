@@ -1,17 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { createPublicClient, http, formatEther } from "viem";
-import { mainnet } from "viem/chains";
 import { SUPPORTED_CURRENCIES } from "../walletAddresses.js";
 import { useLivePrices } from "../hooks/useLivePrices.js";
 import PriceChart from "../components/PriceChart.jsx";
 import Sparkline from "../components/Sparkline.jsx";
 import CreditInvoiceModal from "../components/CreditInvoiceModal.jsx";
-
-const publicClient = createPublicClient({
-  chain: mainnet,
-  transport: http(), // uses a public Ethereum RPC endpoint, no API key needed
-});
 
 // CoinGecko ids for each symbol we support, used to convert a demo dollar
 // value into a plausible coin quantity to display.
@@ -20,9 +13,6 @@ const COINGECKO_IDS = { ETH: "ethereum", BTC: "bitcoin", LTC: "litecoin", SOL: "
 export default function Dashboard() {
   const { user, logout } = usePrivy();
   const { wallets } = useWallets();
-  const [ethBalance, setEthBalance] = useState(null); // in ETH, as a number
-  const [ethPriceUsd, setEthPriceUsd] = useState(null);
-  const [balanceLoading, setBalanceLoading] = useState(true);
   const [demoMode, setDemoMode] = useState(false);
   const [demoBalanceUsd, setDemoBalanceUsd] = useState(0);
   const [demoAsset, setDemoAsset] = useState("ETH");
@@ -43,44 +33,6 @@ export default function Dashboard() {
   const walletAddress = embeddedWallet ? embeddedWallet.address : null;
 
   const email = user?.email?.address || user?.google?.email || user?.apple?.email || "";
-
-  // Fetch the wallet's real on-chain ETH balance, and a live ETH→USD price,
-  // so the dashboard shows what's actually in the wallet instead of $0.00.
-  useEffect(() => {
-    if (!walletAddress) return;
-
-    let cancelled = false;
-
-    async function fetchBalanceAndPrice() {
-      setBalanceLoading(true);
-      try {
-        const [balanceWei, priceRes] = await Promise.all([
-          publicClient.getBalance({ address: walletAddress }),
-          fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd"),
-        ]);
-        const priceData = await priceRes.json();
-
-        if (!cancelled) {
-          setEthBalance(parseFloat(formatEther(balanceWei)));
-          setEthPriceUsd(priceData?.ethereum?.usd ?? null);
-        }
-      } catch (err) {
-        console.error("Failed to fetch balance or price:", err);
-      } finally {
-        if (!cancelled) setBalanceLoading(false);
-      }
-    }
-
-    fetchBalanceAndPrice();
-    // Refresh every 30 seconds so a new deposit shows up without a manual reload.
-    const interval = setInterval(fetchBalanceAndPrice, 30000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [walletAddress]);
-
-  const usdValue = ethBalance !== null && ethPriceUsd !== null ? ethBalance * ethPriceUsd : null;
 
   // Fetch a live USD price for every asset we support (not just ETH), so a
   // demo holding set in dollars can be shown as a coin quantity, the same
@@ -145,18 +97,17 @@ export default function Dashboard() {
     if (price) setDemoQuantity(demoAssetAmount / price);
   }, [demoMode, demoAsset, demoAssetAmount, assetPrices, demoQuantity]);
 
-  // Whichever asset + quantity is currently relevant to show the user —
-  // the demo holding if Demo Mode is on, otherwise their real ETH balance.
-  const displayAsset = demoMode ? demoAsset : "ETH";
-  const displayQuantity = demoMode ? demoQuantity : ethBalance;
-
-  // Prefer the live streaming price for whichever asset is being shown, so
-  // the balance ticks in real time; fall back to the slower-polled price
-  // (or the admin's static demo figure) until the first live tick arrives.
-  const liveAssetPrice = livePrices[displayAsset]?.price;
+  // Demo Mode's holding — only meaningful when demoMode is on, since
+  // there's no real on-chain asset being tracked otherwise (see Site
+  // Credit below for what a real account's balance actually is now).
+  const liveAssetPrice = demoMode ? livePrices[demoAsset]?.price : null;
   const liveUsdValue =
-    displayQuantity != null && liveAssetPrice != null ? displayQuantity * liveAssetPrice : null;
-  const displayedUsdValue = liveUsdValue ?? (demoMode ? demoBalanceUsd : usdValue);
+    demoMode && demoQuantity != null && liveAssetPrice != null ? demoQuantity * liveAssetPrice : null;
+
+  // A real account's "Total portfolio value" is its Site Credit balance —
+  // the Privy wallet's on-chain balance is no longer shown here, since
+  // nothing currently funds it and displaying it was misleading.
+  const displayedUsdValue = demoMode ? liveUsdValue ?? demoBalanceUsd : creditBalance;
 
   // Flash a "+$0.03" / "-$0.05" badge next to the balance whenever it moves.
   useEffect(() => {
@@ -236,13 +187,7 @@ export default function Dashboard() {
                   )}
                 </div>
                 <div className="balance-amount num" style={{ display: "flex", alignItems: "baseline" }}>
-                  {!walletAddress
-                    ? "Setting up your wallet…"
-                    : balanceLoading && !demoMode
-                    ? "Loading…"
-                    : displayedUsdValue !== null
-                    ? `$${displayedUsdValue.toFixed(2)}`
-                    : "$0.00"}
+                  {`$${displayedUsdValue.toFixed(2)}`}
                   {balanceDelta && (
                     <span className={`balance-delta ${balanceDelta.direction}`}>
                       {balanceDelta.direction === "up" ? "+" : "-"}${Math.abs(balanceDelta.amount).toFixed(2)}
@@ -251,122 +196,71 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="balance-actions">
+                {!demoMode && (
+                  <button className="btn-secondary" onClick={() => openAddFunds()}>Add funds</button>
+                )}
                 <button className="btn-primary" disabled>Invest in stocks</button>
               </div>
             </div>
 
-            <div className="credit-balance-card">
-              <div>
-                <div className="credit-balance-label">Site credit</div>
-                <div className="credit-balance-amount num">${creditBalance.toFixed(2)}</div>
-              </div>
-              <button className="btn-secondary" onClick={() => openAddFunds()}>Add funds</button>
-            </div>
-
-            <div className="panel">
-              <h3>Your wallet</h3>
-              {walletAddress ? (
-                <>
+            {demoMode && (
+              <>
+                <div className="panel">
+                  <h3>Your wallet</h3>
                   <span className="status-pill healthy">Ready to receive funds</span>
                   <div className="wallet-address num">
-                    {displayQuantity !== null
-                      ? `${displayQuantity.toFixed(5)} ${displayAsset}`
-                      : "Loading…"}
+                    {demoQuantity !== null ? `${demoQuantity.toFixed(5)} ${demoAsset}` : "Loading…"}
                   </div>
-                </>
-              ) : (
-                <div style={{ fontSize: 14, color: "rgba(237,231,218,0.5)" }}>
-                  Creating your secure wallet — this usually takes a few seconds.
                 </div>
-              )}
-            </div>
 
-            <div className="holdings-panel">
-              <table>
-                <thead>
-                  <tr><th>Asset</th><th></th><th>Value</th></tr>
-                </thead>
-              </table>
-              {demoMode ? (
-                demoAssetAmount > 0 ? (
+                <div className="holdings-panel">
                   <table>
-                    <tbody>
-                      <tr>
-                        <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)" }}>
-                          <div style={{ fontWeight: 600 }}>
-                            {SUPPORTED_CURRENCIES.find((c) => c.symbol === demoAsset)?.label || demoAsset}
-                          </div>
-                          <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>{demoAsset}</div>
-                        </td>
-                        <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)" }}>
-                          <Sparkline
-                            history={livePrices[demoAsset]?.history}
-                            isUp={(livePrices[demoAsset]?.changePct24h ?? 0) >= 0}
-                          />
-                        </td>
-                        <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)", textAlign: "right" }} className="num">
-                          <div>
-                            {demoQuantity !== null ? `${demoQuantity.toFixed(5)} ${demoAsset}` : "Loading price…"}
-                          </div>
-                          <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>
-                            {liveUsdValue !== null ? `$${liveUsdValue.toFixed(2)}` : `$${demoAssetAmount.toFixed(2)}`}
-                          </div>
-                          {livePrices[demoAsset]?.changePct24h != null && (
-                            <div
-                              className="holdings-row-change"
-                              style={{ color: livePrices[demoAsset].changePct24h >= 0 ? "var(--sage)" : "var(--rust)" }}
-                            >
-                              {livePrices[demoAsset].changePct24h >= 0 ? "+" : ""}
-                              {livePrices[demoAsset].changePct24h.toFixed(2)}%
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    </tbody>
+                    <thead>
+                      <tr><th>Asset</th><th></th><th>Value</th></tr>
+                    </thead>
                   </table>
-                ) : (
-                  <div className="empty-state">No holdings yet — add funds to see it appear here.</div>
-                )
-              ) : ethBalance !== null && ethBalance > 0 ? (
-                <table>
-                  <tbody>
-                    <tr>
-                      <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)" }}>
-                        <div style={{ fontWeight: 600 }}>Ethereum</div>
-                        <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>ETH</div>
-                      </td>
-                      <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)" }}>
-                        <Sparkline
-                          history={livePrices.ETH?.history}
-                          isUp={(livePrices.ETH?.changePct24h ?? 0) >= 0}
-                        />
-                      </td>
-                      <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)", textAlign: "right" }} className="num">
-                        <div>{ethBalance.toFixed(5)} ETH</div>
-                        {(liveUsdValue ?? usdValue) !== null && (
-                          <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>
-                            ${(liveUsdValue ?? usdValue).toFixed(2)}
-                          </div>
-                        )}
-                        {livePrices.ETH?.changePct24h != null && (
-                          <div
-                            className="holdings-row-change"
-                            style={{ color: livePrices.ETH.changePct24h >= 0 ? "var(--sage)" : "var(--rust)" }}
-                          >
-                            {livePrices.ETH.changePct24h >= 0 ? "+" : ""}
-                            {livePrices.ETH.changePct24h.toFixed(2)}%
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              ) : (
-                <div className="empty-state">
-                  {balanceLoading ? "Checking your balance…" : "No holdings yet — add funds to see it appear here."}
+                  {demoAssetAmount > 0 ? (
+                    <table>
+                      <tbody>
+                        <tr>
+                          <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)" }}>
+                            <div style={{ fontWeight: 600 }}>
+                              {SUPPORTED_CURRENCIES.find((c) => c.symbol === demoAsset)?.label || demoAsset}
+                            </div>
+                            <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>{demoAsset}</div>
+                          </td>
+                          <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)" }}>
+                            <Sparkline
+                              history={livePrices[demoAsset]?.history}
+                              isUp={(livePrices[demoAsset]?.changePct24h ?? 0) >= 0}
+                            />
+                          </td>
+                          <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)", textAlign: "right" }} className="num">
+                            <div>
+                              {demoQuantity !== null ? `${demoQuantity.toFixed(5)} ${demoAsset}` : "Loading price…"}
+                            </div>
+                            <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>
+                              {liveUsdValue !== null ? `$${liveUsdValue.toFixed(2)}` : `$${demoAssetAmount.toFixed(2)}`}
+                            </div>
+                            {livePrices[demoAsset]?.changePct24h != null && (
+                              <div
+                                className="holdings-row-change"
+                                style={{ color: livePrices[demoAsset].changePct24h >= 0 ? "var(--sage)" : "var(--rust)" }}
+                              >
+                                {livePrices[demoAsset].changePct24h >= 0 ? "+" : ""}
+                                {livePrices[demoAsset].changePct24h.toFixed(2)}%
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="empty-state">No holdings yet — add funds to see it appear here.</div>
+                  )}
                 </div>
-              )}
-            </div>
+              </>
+            )}
           </div>
         )}
       </div>

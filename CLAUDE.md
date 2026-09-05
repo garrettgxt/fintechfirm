@@ -12,11 +12,19 @@
 
 ## Auth & Wallets
 - Privy (@privy-io/react-auth) handles login and creates a self-custodial
-  embedded ETH wallet automatically per user (privyConfig.js).
-- IMPORTANT OPEN ISSUE: crypto purchases (see below) do NOT go to that
-  per-user Privy wallet. They go to 4 FIXED addresses (one per currency)
-  in src/walletAddresses.js, shared across ALL buyers, set up for
-  dev/test purposes only. This conflicts with the site's own copy in
+  embedded ETH wallet automatically per user (privyConfig.js). It's still
+  used for auth/identity (walletAddress is the key for everything —
+  Demo Mode, Site Credit), but Dashboard.jsx no longer fetches or shows
+  that wallet's real on-chain ETH balance — it was showing a leftover
+  test balance with nothing left to fund it (Banxa's disconnected, see
+  below), which read as misleading. Don't re-add an on-chain balance
+  display for real (non-demo) accounts without checking with the user
+  first — Site Credit is the number that matters now.
+- IMPORTANT OPEN ISSUE: crypto purchases via Banxa (see below, currently
+  disconnected from the UI anyway) do NOT go to the per-user Privy
+  wallet. They go to 4 FIXED addresses (one per currency) in
+  src/walletAddresses.js, shared across ALL buyers, set up for dev/test
+  purposes only. This conflicts with the site's own copy in
   Auth.jsx/Landing.jsx claiming funds are always self-custodial / never
   held by Coinstate Capital. Flag this again before any real user or real
   money touches the site — either the copy needs to change or the
@@ -49,10 +57,12 @@
   enough that a handful of simultaneous chart loads exhausts it; confirmed
   via a live 429 during testing). Used on both the homepage and the
   dashboard's Markets tab.
-- The dashboard's portfolio balance and holdings row tick live off this
-  feed (not just the 30s on-chain balance poll), including a demo
-  holding's dollar value floating with the real live price once its coin
-  quantity is frozen — see the comment in Dashboard.jsx.
+- In Demo Mode, the dashboard's balance and holdings row tick live off
+  this feed, including the demo holding's dollar value floating with the
+  real live price once its coin quantity is frozen — see the comment in
+  Dashboard.jsx. For a real (non-demo) account the balance shown is Site
+  Credit (below), which only changes when a payment is actually credited,
+  not a continuous tick.
 
 ## Demo Mode
 - Admin panel at /admin (password-gated via ADMIN_PASSWORD env var, not
@@ -63,9 +73,11 @@
   obvious from the column name, so don't assume otherwise. Dashboard.jsx
   fetches live CoinGecko prices for all 4 assets and converts this dollar
   value into a displayed coin quantity.
-- When demo_mode is on, both the "Your wallet" panel and the holdings
-  table show the demo asset/quantity instead of the real on-chain ETH
-  balance / wallet address.
+- When demo_mode is on, Dashboard.jsx shows a "Your wallet" panel and a
+  holdings table with the demo asset/quantity — these are demo-mode-only
+  now; a real (non-demo) account shows neither, just the Site Credit
+  balance (below), since there's no real on-chain balance being tracked
+  or displayed anymore.
 
 ## Site Credit (custodial — separate from the self-custodial wallet)
 - This is now the site's PRIMARY funding entry point ("Add funds" in the
@@ -104,9 +116,14 @@
 - New Cloudflare env vars needed: NOWPAYMENTS_API_KEY, NOWPAYMENTS_IPN_SECRET
   (from the user's own NOWPayments dashboard — not set yet as of this
   writing, so the flow is built but not yet live).
-- The "Site credit" balance is intentionally displayed as a separate card
-  from "Total portfolio value" on the dashboard — don't merge them, since
-  one is real on-chain holdings and the other is this custodial balance.
+- For a real (non-demo) account, "Total portfolio value" on the
+  dashboard IS the Site Credit balance (`creditBalance` in Dashboard.jsx)
+  — there's no separate on-chain figure being shown anymore, so this is
+  no longer two numbers to keep apart, just one. In Demo Mode, the
+  balance card instead shows the admin-set demo figure, same as before —
+  Site Credit and Demo Mode are still two independent systems under the
+  hood (separate tables, separate state), they just happen to render in
+  the same card slot depending on demo_mode.
 
 ## Supabase
 - Actively used, not optional — table wallet_overrides (wallet_address,
