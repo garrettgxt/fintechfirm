@@ -1,9 +1,11 @@
 # Coinstate Capital — React app setup
 
-This replaces the old static HTML site's auth/dashboard with a real React app.
-Privy now handles login (email, Google, Apple) AND creates each user's
+Privy handles login (email, Google, Apple) AND creates each user's
 self-custodial wallet automatically. MoonPay is wired to buy crypto straight
-into that wallet.
+into that wallet. Supabase backs the admin Demo Mode feature (overriding a
+wallet's displayed balance). The site is deployed on **Cloudflare Pages**,
+with Cloudflare Pages Functions (the `functions/` folder) providing the
+server-side pieces.
 
 ## 1. Install dependencies
 
@@ -25,54 +27,89 @@ change there.
     npm run dev
 
 Open the URL it gives you (usually http://localhost:5173). Note: the "Buy
-crypto" button will show an error locally, because the URL-signing function
-(step 5) only runs once deployed to Netlify — that's expected, not a bug.
+crypto" button, wallet registration, and Demo Mode lookups will show errors
+locally, because those all depend on the `functions/` folder, which only
+runs once deployed to Cloudflare Pages — that's expected, not a bug. (If you
+want to test functions locally, use `wrangler pages dev -- npm run dev`.)
 
-## 4. Deploy to Netlify
+## 4. Deploy to Cloudflare Pages
 
-- Go to netlify.com, sign up/log in
-- Drag this whole folder onto the Netlify dashboard, OR connect it to a
-  GitHub repo for automatic deploys
-- Netlify will detect `netlify.toml` and build it automatically
+The site is already live on Cloudflare Pages, deployed automatically via
+Cloudflare's GitHub integration — pushing to the connected branch triggers a
+build and deploy, no manual steps needed. `functions/*.js` is auto-detected
+and deployed as Pages Functions (each file's `onRequest(context)` export
+maps to a route matching its filename, e.g. `functions/get-override.js` →
+`/get-override`).
 
-## 5. Add your MoonPay SECRET key to Netlify (server-side only)
+If setting this up fresh: in the Cloudflare dashboard, Workers & Pages →
+Create → Pages → connect to this GitHub repo. Build command `npm run build`,
+build output directory `dist`.
 
-This is the key that must never appear in any file in this folder.
+## 5. Required environment variables (Cloudflare Pages dashboard)
 
-- In your Netlify site: Site settings → Environment variables → Add variable
-- Key: `MOONPAY_SECRET_KEY`
-- Value: your MoonPay **Test Secret Key** (starts with `sk_test_`, also from
-  Developers → API Keys)
-- Redeploy the site after adding it (Netlify → Deploys → Trigger deploy)
+In the Pages project → Settings → Environment variables, add (for both
+Production and Preview):
 
-## 6. Update Supabase / Privy allowed domains
+| Variable | Used by | Notes |
+|---|---|---|
+| `MOONPAY_SECRET_KEY` | `functions/sign-moonpay-url.js` | MoonPay **Test Secret Key** (`sk_test_...`) from Developers → API Keys. Never put this in any file. |
+| `SUPABASE_URL` | `functions/get-override.js`, `register-wallet.js`, `admin-list.js`, `admin-update.js` | e.g. `https://your-project.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | same as above | From Supabase Project Settings → API → `service_role` key. This bypasses row-level security — server-side only, never in `src/` or the browser. |
+| `ADMIN_PASSWORD` | `functions/admin-list.js`, `admin-update.js` | Password gating the `/admin` panel (sent as the `x-admin-password` header). |
 
-- In your Privy dashboard: add your new Netlify URL under allowed domains
-- If you still want Supabase for anything (e.g. storing extra profile data
-  later), update its Site URL / Redirect URLs the same way we discussed
-  earlier — but note Supabase is no longer required for login, since Privy
-  now handles that directly.
+Also under Settings → Runtime → Compatibility flags, add `nodejs_compat`
+(required by `sign-moonpay-url.js`'s use of Node's `crypto` module).
+
+Redeploy after adding/changing any of these (Pages → Deployments → retry
+latest, or just push a commit).
+
+## 6. Supabase setup
+
+Supabase is required, not optional — it stores the `wallet_overrides` table
+that backs the admin Demo Mode feature (letting an admin show a fake
+balance/asset for a given wallet instead of its real on-chain balance).
+
+The app talks to Supabase only server-side, via plain REST calls from the
+Cloudflare Pages Functions in `functions/` (no `@supabase/supabase-js`
+client, no Supabase code in `src/`).
+
+`wallet_overrides` columns used by the functions:
+`wallet_address` (text, primary/unique key), `email` (text, nullable),
+`demo_mode` (bool), `demo_balance_usd` (numeric), `demo_asset` (text),
+`demo_asset_amount` (numeric), `updated_at` (timestamptz).
+
+Schema changes should go through Supabase migrations
+(`supabase migration new <name>`, edit the SQL, `supabase db push`) once
+this repo is linked to the Supabase project (`supabase link`), rather than
+one-off manual SQL, so there's a real history of schema changes.
+
+In your Privy dashboard, make sure your Cloudflare Pages URL is listed under
+allowed domains.
 
 ## 7. Test the real flow
 
-1. Visit your Netlify URL, click "Create your wallet"
+1. Visit your Cloudflare Pages URL, click "Create your wallet"
 2. Log in with email, Google, or Apple through Privy's popup
 3. You'll land on `/dashboard` — a wallet address should appear within a
-   few seconds (Privy creating it automatically)
+   few seconds (Privy creating it automatically), and the wallet gets
+   registered into `wallet_overrides` via `register-wallet.js`
 4. Click "Buy crypto" — MoonPay's sandbox widget should open, pre-filled
    with your wallet address
 5. Complete a test purchase using MoonPay's sandbox test card details (see
    their sandbox docs) — the crypto is testnet-only in sandbox mode, so
    nothing costs real money
+6. Visit `/admin`, enter the `ADMIN_PASSWORD`, and confirm you can see and
+   toggle Demo Mode for a registered wallet
 
 ## What's real vs. what's next
 
 **Real now:** login, wallet creation, MoonPay sandbox purchases landing on
-a real (testnet) wallet address.
+a real (testnet) wallet address, admin Demo Mode overrides via Supabase.
 
 **Not built yet:**
 - Reading the wallet's actual on-chain balance to show in the holdings
-  table (currently shows a static "$0.00" / empty state)
+  table (currently shows a static "$0.00" / empty state, unless Demo Mode
+  is on for that wallet)
 - Stock investing (Alpaca integration)
 - Production MoonPay keys (requires their KYB approval — separate from
   anything here)

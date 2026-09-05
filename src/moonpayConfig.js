@@ -7,8 +7,8 @@
 //
 // This publishable key is safe for browser code — it's designed to be
 // public, similar to the Supabase anon key. Your MoonPay SECRET key is
-// different and must only ever be used in netlify/functions (server-side),
-// never here.
+// different and must only ever be used in functions/ (Cloudflare Pages
+// Functions, server-side), never here.
 
 export const MOONPAY_API_KEY = "pk_test_5wCtPqHc6T5P122AIcVBvWVoimAAXDwi";
 

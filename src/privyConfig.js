@@ -4,8 +4,8 @@
 // publishable key). It was already provided: cmtniisf700490dk0brltloy2
 //
 // Do NOT put your Privy App SECRET in this file or anywhere in src/ —
-// that key must only ever live on a server (see netlify/functions), never
-// in code that ships to the browser.
+// that key must only ever live on a server (see functions/, Cloudflare
+// Pages Functions), never in code that ships to the browser.
 
 export const PRIVY_APP_ID = "cmtniisf700490dk0brltloy2";
 
