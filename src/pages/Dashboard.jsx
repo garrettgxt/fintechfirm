@@ -88,7 +88,11 @@ export default function Dashboard() {
       .then((data) => {
         setDemoMode(data.demoMode ?? false);
         setDemoCashUsd(data.cashUsd ?? 0);
-        setDemoPositions(data.positions ?? []);
+        // Defense-in-depth against dust rows (e.g. a "Max" sell leaving a
+        // near-zero remainder from floating-point rounding) — the server
+        // side (apply_demo_trade) already deletes these on sell, but a
+        // holding this small is never meaningful to show regardless.
+        setDemoPositions((data.positions ?? []).filter((p) => p.quantity > 1e-8));
       })
       .catch((err) => console.error("Failed to fetch demo portfolio:", err));
   }

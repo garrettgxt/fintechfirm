@@ -317,7 +317,7 @@ export default function AssetDetailPanel({
       onTraded?.();
     } catch (err) {
       const known = {
-        insufficient_cash: "Not enough demo cash for this trade.",
+        insufficient_cash: "Not enough cash for this trade.",
         insufficient_position: "You don't hold enough to sell that much.",
         demo_mode_not_active: "Demo Mode isn't active on this account.",
       };
@@ -506,7 +506,7 @@ export default function AssetDetailPanel({
                   disabled={maxAmount == null}
                   title={
                     side === "buy"
-                      ? "Use all available demo cash"
+                      ? "Use all available cash"
                       : `Use your full ${symbol} holding`
                   }
                 >
@@ -524,7 +524,7 @@ export default function AssetDetailPanel({
                 </div>
               )}
 
-              {overBudget && <div style={{ fontSize: 12.5, color: "var(--rust)", marginBottom: 12 }}>That's more than your demo cash balance.</div>}
+              {overBudget && <div style={{ fontSize: 12.5, color: "var(--rust)", marginBottom: 12 }}>That's more than your cash balance.</div>}
               {overHolding && <div style={{ fontSize: 12.5, color: "var(--rust)", marginBottom: 12 }}>You only hold {holdingQuantity} {symbol}.</div>}
               {error && <div style={{ fontSize: 12.5, color: "var(--rust)", marginBottom: 12 }}>{error}</div>}
               {success && <div style={{ fontSize: 12.5, color: "var(--sage)", marginBottom: 12 }}>{success}</div>}
