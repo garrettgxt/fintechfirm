@@ -4,10 +4,12 @@ import PriceChart from "../components/PriceChart.jsx";
 import { useMarketQuotes } from "../hooks/useMarketQuotes.js";
 
 const HOMEPAGE_STOCKS = [
-  { symbol: "AAPL", name: "Apple" },
-  { symbol: "TSLA", name: "Tesla" },
-  { symbol: "NVDA", name: "Nvidia" },
-  { symbol: "NFLX", name: "Netflix" },
+  { symbol: "AAPL", name: "Apple", type: "stock" },
+  { symbol: "TSLA", name: "Tesla", type: "stock" },
+  { symbol: "NVDA", name: "Nvidia", type: "stock" },
+  { symbol: "NFLX", name: "Netflix", type: "stock" },
+  { symbol: "SPY", name: "S&P 500", type: "etf" },
+  { symbol: "QQQ", name: "Nasdaq 100", type: "etf" },
 ];
 const HOMEPAGE_STOCK_SYMBOLS = HOMEPAGE_STOCKS.map((s) => s.symbol);
 
@@ -100,7 +102,7 @@ export default function Landing() {
         <div className="wrap">
           <div className="section-head">
             <h2 className="serif">The market's biggest names</h2>
-            <p>Track major stocks alongside crypto, all in one account.</p>
+            <p>Major stocks and indices like the S&amp;P 500 and Nasdaq 100, alongside crypto, all in one account.</p>
           </div>
           <div className="chart-grid">
             {HOMEPAGE_STOCKS.map((s) => (
@@ -108,7 +110,7 @@ export default function Landing() {
                 key={s.symbol}
                 symbol={s.symbol}
                 name={s.name}
-                type="stock"
+                type={s.type}
                 quote={stockQuotes[s.symbol]}
                 onBuy={() => (window.location.href = "/auth")}
               />

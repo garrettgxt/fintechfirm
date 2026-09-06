@@ -200,8 +200,8 @@ export default function Dashboard() {
                 Demo Mode is on — Buy/Sell here trades your demo cash balance, not real money.
               </div>
             )}
+            {renderAssetGroup("Major Indices (S&P 500, Nasdaq 100, Dow)", ETFS)}
             {renderAssetGroup("Stocks", STOCKS)}
-            {renderAssetGroup("Index ETFs", ETFS)}
             {renderAssetGroup("Forex", FOREX)}
             {renderAssetGroup("Crypto", CRYPTO)}
           </div>
