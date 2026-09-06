@@ -6,31 +6,24 @@
 // type: "stock" | "etf" | "forex" uses Twelve Data via
 // functions/market-quote.js and functions/market-history.js.
 
+// Trimmed 2026-09-06 from 24 stocks/5 forex pairs down to this shorter
+// list (32 -> 11 non-crypto symbols) after Twelve Data's free-tier daily
+// credit cap (800/day, metered per symbol per request) got exhausted by
+// real usage twice in one day — see the Twelve Data section in
+// CLAUDE.md. This was the user's explicit choice among the options
+// presented (upgrade plan / wait for reset / shrink catalog): stay on
+// the free tier and reduce exposure instead of paying or waiting. A
+// smaller catalog means more Markets-tab views fit in the daily budget
+// before hitting the cap — it does not remove the cap. Crypto is
+// unaffected (Coinbase/Binance aren't credit-metered this way), which is
+// why that catalog stayed broad while this one got cut.
 export const STOCKS = [
   { symbol: "AAPL", name: "Apple", type: "stock" },
   { symbol: "MSFT", name: "Microsoft", type: "stock" },
-  { symbol: "GOOGL", name: "Alphabet", type: "stock" },
   { symbol: "AMZN", name: "Amazon", type: "stock" },
   { symbol: "NVDA", name: "Nvidia", type: "stock" },
   { symbol: "TSLA", name: "Tesla", type: "stock" },
-  { symbol: "META", name: "Meta Platforms", type: "stock" },
   { symbol: "NFLX", name: "Netflix", type: "stock" },
-  { symbol: "JPM", name: "JPMorgan Chase", type: "stock" },
-  { symbol: "V", name: "Visa", type: "stock" },
-  { symbol: "WMT", name: "Walmart", type: "stock" },
-  { symbol: "DIS", name: "Disney", type: "stock" },
-  { symbol: "KO", name: "Coca-Cola", type: "stock" },
-  { symbol: "PEP", name: "PepsiCo", type: "stock" },
-  { symbol: "XOM", name: "Exxon Mobil", type: "stock" },
-  { symbol: "BA", name: "Boeing", type: "stock" },
-  { symbol: "JNJ", name: "Johnson & Johnson", type: "stock" },
-  { symbol: "PG", name: "Procter & Gamble", type: "stock" },
-  { symbol: "MA", name: "Mastercard", type: "stock" },
-  { symbol: "HD", name: "Home Depot", type: "stock" },
-  { symbol: "ORCL", name: "Oracle", type: "stock" },
-  { symbol: "CRM", name: "Salesforce", type: "stock" },
-  { symbol: "AMD", name: "AMD", type: "stock" },
-  { symbol: "INTC", name: "Intel", type: "stock" },
 ];
 
 export const ETFS = [
@@ -41,10 +34,7 @@ export const ETFS = [
 
 export const FOREX = [
   { symbol: "EUR/USD", name: "Euro / US Dollar", type: "forex" },
-  { symbol: "GBP/USD", name: "British Pound / US Dollar", type: "forex" },
   { symbol: "USD/JPY", name: "US Dollar / Japanese Yen", type: "forex" },
-  { symbol: "USD/CAD", name: "US Dollar / Canadian Dollar", type: "forex" },
-  { symbol: "AUD/USD", name: "Australian Dollar / US Dollar", type: "forex" },
 ];
 
 export const CRYPTO = [

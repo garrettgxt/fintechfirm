@@ -217,8 +217,9 @@
   (below). Binance klines history is likewise unaffected (client-side,
   generous limits, confirmed previously).
 - Dashboard.jsx's Markets tab renders every catalog asset as its own
-  PriceChart card — with 61 crypto + 24 stocks + 3 ETFs + 5 forex, that's
-  ~93 chart cards on one page. Left as-is since it wasn't reported broken,
+  PriceChart card — with 61 crypto + 11 non-crypto (see below; trimmed
+  2026-09-06), that's ~72 chart cards on one page. Left as-is since it
+  wasn't reported broken,
   but if this ever becomes a real perf complaint, lazy-loading/pagination
   on that tab (rather than shrinking the catalog) is the fix to reach for.
 
@@ -293,11 +294,15 @@
   gradually rather than all at once on a page with many cards. Crypto
   history (Binance) isn't affected — its limits are generous enough that
   this was never a problem there.
-- src/assetCatalog.js's non-crypto side is the curated catalog (~24
-  stocks, 3 index ETFs, 5 forex pairs) — deliberately not "all stocks/
-  every pair", which isn't realistically buildable on this data budget;
-  scoped down with the user. The crypto side is much broader (61 coins) —
-  see the Crypto Catalog section above — since that data comes from
+- src/assetCatalog.js's non-crypto side is the curated catalog — trimmed
+  2026-09-06 to 6 stocks (AAPL, MSFT, AMZN, NVDA, TSLA, NFLX), 3 index
+  ETFs (SPY, QQQ, DIA), 2 forex pairs (EUR/USD, USD/JPY) = 11 symbols
+  total, down from 32 — see the credit-exhaustion incident above; this
+  was a deliberate tradeoff to survive on Twelve Data's free tier, not a
+  data-availability limit. Deliberately not "all stocks/every pair",
+  which isn't realistically buildable on this data budget regardless.
+  The crypto side is much broader (61 coins) — see the Crypto Catalog
+  section above — since that data comes from
   Coinbase/Binance, which aren't credit-metered the way Twelve Data is.
 
 ## Site Credit (custodial — separate from the self-custodial wallet)
