@@ -308,11 +308,6 @@ export default function Dashboard() {
           </div>
         ) : tab === "markets" ? (
           <div className="content">
-            {demoMode && (
-              <div style={{ fontSize: 12.5, color: "var(--brass-bright)", marginBottom: 24 }}>
-                Demo Mode is on — Buy/Sell here trades your demo cash balance, not real money.
-              </div>
-            )}
             {renderAssetGroup("Major Indices (S&P 500, Nasdaq 100, Dow)", ETFS)}
             {renderAssetGroup("Stocks", STOCKS)}
             {renderAssetGroup("Forex", FOREX)}
