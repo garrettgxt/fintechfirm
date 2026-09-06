@@ -167,7 +167,36 @@
   used internally for the overBudget check, just not shown as text
   anymore. The "You hold N SYMBOL" sell-context line is kept (shown only
   when side === "sell") since that's information the user actually needs,
-  not restated state.
+  not restated state. Same reasoning applied again 2026-09-06 to the
+  panel's other copy that said "demo" (the Max button's tooltip, the
+  insufficient-cash error, the over-budget message) — all now just say
+  "cash".
+- "Max" button (2026-09-06): next to the Buy/Sell amount field, fills in
+  the largest amount that order could use — all remaining cash for a buy,
+  or the full held quantity for a sell — converted into whichever unit
+  (dollars/shares) is selected, using the market or entered limit price.
+  Rounded DOWN (`floorTo` in AssetDetailPanel.jsx), never up, so the
+  follow-on quantity/cost math can't land a hair over the true limit.
+  IMPORTANT FOLLOW-UP, same day: rounding down on a Max SELL still
+  discovered a real bug, not just introduced one — the value sent to
+  apply_demo_trade could come back a hair below the true stored quantity
+  purely from ordinary floating-point rounding (e.g. selling
+  1.9999999999999998 of a stored 2), leaving a near-zero remainder like
+  5e-17 in `demo_positions`. The old `v_new_qty <= 0` check in
+  apply_demo_trade only deleted the row on an exact non-positive
+  quantity, so that dust surfaced permanently as an unsellable
+  "5e-17 AAPL" line in the holdings table. Fixed in supabase/migrations/
+  20260906230844_clear_dust_demo_positions.sql: widened the cutoff to
+  `v_new_qty <= 1e-8` (far smaller than any real position — shares are
+  already display-rounded to 6 decimals client-side) so a full sell
+  always clears the row, plus a one-time `delete ... where quantity <=
+  1e-8` for dust that already existed. Dashboard.jsx's
+  `refreshDemoPortfolio` also now filters `quantity > 1e-8` defensively
+  when it sets `demoPositions`, so even a future edge case this doesn't
+  anticipate can't leave a dust row visible or feeding the Markets-tab
+  quote-fetch list. If a similar "should be exactly zero but isn't" dust
+  bug ever shows up elsewhere involving demo_positions.quantity, the same
+  epsilon-cutoff fix applies.
 
 ## Search, Asset Detail Page, and Limit Orders (Demo Mode)
 - src/components/AssetSearch.jsx: client-side search over the static
