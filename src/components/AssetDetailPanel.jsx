@@ -7,14 +7,15 @@ import { TV_SYMBOLS } from "../assetCatalog.js";
 import TradingViewWidget from "./TradingViewWidget.jsx";
 
 // Full range set, matching the reference screenshots — crypto only.
-// Stock/ETF/forex charts are TradingView's free "Mini Chart" embed widget
-// instead (see TradingViewWidget.jsx and PriceChart.jsx for why: Twelve
-// Data's time_series endpoint isn't batchable and was the dominant cost
-// behind a real credit-exhaustion incident, documented in CLAUDE.md).
-// Mini Chart has no built-in range-switching UI (unlike the richer
-// "Symbol Overview" widget tried first, which also duplicated our own
-// name/symbol header — dropped for that reason), so MARKET_RANGES drives
-// our own toggle instead, styled the same as the crypto one.
+// Stock/ETF/forex charts are TradingView's free embed widget instead
+// (see TradingViewWidget.jsx and PriceChart.jsx for why: Twelve Data's
+// time_series endpoint isn't batchable and was the dominant cost behind
+// a real credit-exhaustion incident, documented in CLAUDE.md), rendered
+// in chartOnly mode — its own name/price/date-tab row duplicated our
+// header in two widget types tried first, so MARKET_RANGES drives our
+// own toggle instead, styled the same as the crypto one — `tv` is
+// TradingView's own range id, appended to the symbol string (see
+// TradingViewWidget.jsx).
 const CRYPTO_RANGES = [
   { label: "1D", interval: "5m", limit: 288 },
   { label: "1W", interval: "1h", limit: 168 },
@@ -27,12 +28,12 @@ const CRYPTO_RANGES = [
   { label: "10Y", interval: "1w", limit: 520 },
 ];
 const MARKET_RANGES = [
-  { label: "1D", tv: "1D" },
-  { label: "1M", tv: "1M" },
-  { label: "3M", tv: "3M" },
-  { label: "1Y", tv: "12M" },
-  { label: "5Y", tv: "60M" },
-  { label: "All", tv: "ALL" },
+  { label: "1D", tv: "1d" },
+  { label: "1M", tv: "1m" },
+  { label: "3M", tv: "3m" },
+  { label: "1Y", tv: "12m" },
+  { label: "5Y", tv: "60m" },
+  { label: "All", tv: "all" },
 ];
 
 const UP_COLORS = { lineColor: "#5C8F72", topColor: "rgba(92,143,114,0.28)" };
@@ -324,7 +325,7 @@ export default function AssetDetailPanel({
                   </button>
                 ))}
               </div>
-              <TradingViewWidget tvSymbol={TV_SYMBOLS[symbol]} height={360} dateRange={marketRange.tv} />
+              <TradingViewWidget tvSymbol={TV_SYMBOLS[symbol]} height={360} rangeCode={marketRange.tv} />
             </>
           )}
 
