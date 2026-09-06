@@ -4,6 +4,14 @@
 // Binance klines), and cached the same way as market-quote.js.
 //
 // SETUP: same TWELVE_DATA_API_KEY as market-quote.js.
+//
+// Every distinct symbol+interval+outputsize combination is its own cache
+// key, and Twelve Data meters time_series calls the same way as quotes
+// (credits, not just a rate limit) — a longer-range chart (3M/6M/YTD/1Y/
+// 5Y/10Y) barely changes minute to minute, so this is cached much longer
+// than a live quote. See market-quote.js for the incident that motivated
+// this (the free tier's 800/day credit cap was blown through in under 20
+// minutes with a 45s cache).
 
 export async function onRequest(context) {
   const url = new URL(context.request.url);
@@ -45,9 +53,14 @@ export async function onRequest(context) {
       .filter((p) => Number.isFinite(p.time) && Number.isFinite(p.value))
       .reverse();
 
+    // Intraday intervals (1D/1W ranges) move fast enough to still refresh
+    // somewhat often; daily/weekly-candle ranges (1M and beyond) are
+    // cached much longer since a candle that's already closed doesn't
+    // change until the next one forms.
+    const maxAge = interval === "5min" || interval === "1h" ? 300 : 3600;
     const response = new Response(JSON.stringify({ points }), {
       status: 200,
-      headers: { "Content-Type": "application/json", "Cache-Control": "max-age=45" },
+      headers: { "Content-Type": "application/json", "Cache-Control": `max-age=${maxAge}` },
     });
     context.waitUntil(cache.put(cacheKey, response.clone()));
     return response;

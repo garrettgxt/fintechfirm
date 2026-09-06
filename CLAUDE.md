@@ -116,8 +116,10 @@
   chips for Stocks/ETFs/Forex/Crypto only (no Options/Futures/IPOs/
   Earnings — scoped down from the user's reference screenshots since
   there's no real data source for those). Rendered in Landing.jsx's nav
-  (selecting a result sends a visitor to /auth) and Dashboard.jsx's
-  topbar (selecting a result opens the asset detail view below).
+  (selecting a result sends a logged-out visitor to /auth — see
+  src/pendingAsset.js below for what happens to that selection) and
+  Dashboard.jsx's topbar (selecting a result opens the asset detail view
+  below directly, since there's already a session).
 - src/components/AssetDetailPanel.jsx: the per-asset page (big chart +
   "Market details" stats + Buy/Sell panel), rendered as a third internal
   view in Dashboard.jsx (`tab === "asset"` + `selectedAsset` state) rather
@@ -173,6 +175,53 @@
   outbound IPs — see Demo Mode below) — acceptable only because of the
   demo_mode gate.
 
+## Preserving Intent Across the /auth Redirect
+- Bug fixed 2026-09-06: a logged-out visitor clicking a stock/coin (via
+  Landing.jsx's search bar or a chart's Buy button) was sent to /auth with
+  no way to carry over what they clicked — after logging in they landed
+  on the plain Dashboard (Portfolio tab), with no memory of the asset
+  they wanted, unable to buy/sell/limit it without re-searching.
+- src/pendingAsset.js: `setPendingAsset(asset)` / `consumePendingAsset()`
+  wrap a sessionStorage key. Landing.jsx's `goToAuth(asset)` helper calls
+  `setPendingAsset` before redirecting; Dashboard.jsx calls
+  `consumePendingAsset()` once on mount and, if it finds something, opens
+  straight to that asset's detail view (`tab === "asset"`) instead of
+  defaulting to Portfolio. It's read-and-clear (sessionStorage, one-time
+  resume), not a persistent redirect rule — a normal direct visit to
+  /dashboard is unaffected.
+
+## Crypto Catalog (Wealthsimple-style breadth)
+- src/assetCatalog.js's CRYPTO list was expanded from the original 12 to
+  61 coins, aiming to match the breadth of coins a major retail platform
+  (Wealthsimple Crypto, as referenced by the user) lists — this is a
+  broad set of major/well-known coins, not a verified line-by-line copy
+  of Wealthsimple's exact current lineup (no live access to that list).
+- IMPORTANT: every symbol added was verified BEFORE adding, against two
+  live sources — this matters because a coin missing from either silently
+  shows as permanently broken with no error:
+  1. https://api.exchange.coinbase.com/products (must have a `<SYM>-USD`
+     entry) — src/hooks/useLivePrices.js's real-time ticker needs this;
+     the file's own comment already warned about this exact failure mode
+     (TRX isn't on Coinbase and was deliberately left out for that
+     reason) before this expansion.
+  2. Binance's USDT trading pairs (`<SYM>USDT`) — src/hooks/
+     useAssetHistory.js builds this symbol directly with no mapping, for
+     chart history.
+  Both `PRODUCTS` and `COINGECKO_IDS` in useLivePrices.js were extended
+  1:1 for every new symbol (the WS subscribe list and the CoinGecko
+  fallback-poll list must stay in sync, or a symbol only present in one
+  gets no data on the path that's actually active).
+- Coinbase's shared WebSocket has no meaningful per-symbol subscription
+  limit, so going from 12 to 61 crypto ticker subscriptions on the one
+  shared connection is not a concern the way Twelve Data's credits are
+  (below). Binance klines history is likewise unaffected (client-side,
+  generous limits, confirmed previously).
+- Dashboard.jsx's Markets tab renders every catalog asset as its own
+  PriceChart card — with 61 crypto + 24 stocks + 3 ETFs + 5 forex, that's
+  ~93 chart cards on one page. Left as-is since it wasn't reported broken,
+  but if this ever becomes a real perf complaint, lazy-loading/pagination
+  on that tab (rather than shrinking the catalog) is the fix to reach for.
+
 ## Market Data for Stocks/ETFs/Forex (Twelve Data)
 - Crypto is untouched — still Coinbase WS (live ticks) + Binance klines
   (history), see Live Market Data above. Stocks/ETFs/forex use a
@@ -180,37 +229,59 @@
   cover those: functions/market-quote.js (batched live quotes) and
   functions/market-history.js (historical candles, reshaped into the
   same {time, value}[] PriceChart.jsx already expects for crypto).
-- Needs `TWELVE_DATA_API_KEY` (Cloudflare secret) from the user's own
-  Twelve Data account — not set yet as of this writing, so stock/forex
-  quotes and charts return a clean "not configured" error until it is;
-  crypto is unaffected either way.
-- Twelve Data's free tier (800 calls/day, 8/min) is shared across every
-  visitor to the site, not per-user, so both functions cache their
-  upstream response for ~45s via the Cache API, keyed by the exact
-  request URL. Just as important: PriceChart.jsx does NOT poll its own
-  quote for non-crypto symbols — it takes a `quote` prop instead, fed by
-  ONE batched src/hooks/useMarketQuotes.js call in the parent
-  (Dashboard.jsx polls all of src/assetCatalog.js's NON_CRYPTO_SYMBOLS at
-  once; Landing.jsx polls just its 4-6 homepage symbols). If you add a new
-  place that renders PriceChart for non-crypto symbols, do the same —
-  don't let PriceChart call useMarketQuotes itself, or a screen full of
-  cards fans out into many separate upstream calls and blows through the
-  rate limit.
+- Needs `TWELVE_DATA_API_KEY` (Cloudflare secret) — now set, from the
+  user's own Twelve Data account (free tier).
+- IMPORTANT INCIDENT (2026-09-06): the free tier's 800 credits/day cap was
+  found completely exhausted (1995 credits used against an 800 cap,
+  confirmed via a direct call to Twelve Data's own /api_usage endpoint,
+  which returned "You have run out of API credits for the day"). This is
+  why stocks/ETFs/indices were stuck on "Loading..." — NOT a code bug,
+  Twelve Data was simply refusing every request with a 429 until its own
+  daily reset. Root cause: Twelve Data meters a batched /quote call at
+  ONE CREDIT PER SYMBOL, not per HTTP call — with the old 45s cache and
+  Dashboard.jsx polling ~32 non-crypto symbols in one batch, a single open
+  Dashboard tab alone could burn the entire 800/day cap in under 20
+  minutes. market-history.js's time_series calls are metered the same way
+  per symbol+range combination, compounding it further.
+- Fix applied: market-quote.js's cache TTL went from 45s to 300s (5 min),
+  and market-history.js's went from a flat 45s to 300s for intraday
+  ranges (1D/1W) and 3600s (1hr) for daily/weekly-candle ranges (1M and
+  beyond, which don't meaningfully change minute to minute) — see the
+  comments in both files. This cuts the burn rate roughly 6-20x depending
+  on range, but does NOT remove the underlying cap — sustained real
+  traffic hitting the ~32-symbol Markets tab repeatedly can still exhaust
+  800/day. If stock/ETF/forex data needs to be reliably available under
+  real usage (not just occasional demo/dev traffic), a paid Twelve Data
+  plan (removes the daily cap) is the actual fix — flag this to the user
+  rather than continuing to shrink cache windows if it recurs.
+- Just as important: PriceChart.jsx does NOT poll its own quote for
+  non-crypto symbols — it takes a `quote` prop instead, fed by ONE
+  batched src/hooks/useMarketQuotes.js call in the parent (Dashboard.jsx
+  polls all of src/assetCatalog.js's NON_CRYPTO_SYMBOLS at once;
+  Landing.jsx polls just its 4-6 homepage symbols). If you add a new place
+  that renders PriceChart for non-crypto symbols, do the same — don't let
+  PriceChart call useMarketQuotes itself, or a screen full of cards fans
+  out into many separate upstream calls and burns credits many times
+  over for data that's identical across all of them.
 - market-history.js does NOT have the same batching option as quotes —
   Twelve Data's time_series endpoint is one symbol per call, so every
-  PriceChart card fetches its own history independently. Confirmed in
-  production: a page with just 6 non-crypto cards was enough to 429
-  every one of them. PriceChart.jsx now serializes ALL non-crypto history
-  fetches through a shared module-level queue (`enqueueHistoryFetch`,
-  ~4s between requests) so a big page (Dashboard's Markets tab has 30+
-  non-crypto cards) drains through the free-tier limit over time instead
-  of overrunning it immediately — expect stock/ETF/forex charts to fill
-  in gradually rather than all at once on a page with many cards. Crypto
+  PriceChart/AssetDetailPanel view fetches its own history independently.
+  Confirmed in production early on: a page with just 6 non-crypto cards
+  was enough to 429 every one of them before caching existed at all. All
+  non-crypto history fetches are serialized through a shared queue in
+  src/hooks/useAssetHistory.js (`enqueueHistoryFetch`, ~4s between
+  requests) so a big page (Dashboard's Markets tab has 30+ non-crypto
+  cards) drains through the per-minute rate limit over time instead of
+  overrunning it immediately — expect stock/ETF/forex charts to fill in
+  gradually rather than all at once on a page with many cards. Crypto
   history (Binance) isn't affected — its limits are generous enough that
   this was never a problem there.
-- src/assetCatalog.js is the curated catalog (~24 stocks, 3 index ETFs,
-  5 forex pairs, 12 crypto) — deliberately not "all stocks/every pair",
-  which isn't realistically buildable; scoped down with the user.
+- src/assetCatalog.js's non-crypto side is the curated catalog (~24
+  stocks, 3 index ETFs, 5 forex pairs) — deliberately not "all stocks/
+  every pair", which isn't realistically buildable on this data budget;
+  scoped down with the user. The crypto side is much broader (61 coins) —
+  see the Crypto Catalog section above — since that data comes from
+  Coinbase/Binance, which aren't credit-metered the way Twelve Data is.
 
 ## Site Credit (custodial — separate from the self-custodial wallet)
 - This is now the site's PRIMARY funding entry point ("Add funds" in the

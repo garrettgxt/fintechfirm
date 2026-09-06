@@ -2,13 +2,13 @@
 // (Twelve Data, proxied so the API key never reaches the browser).
 //
 // Unlike useLivePrices (a real-time WebSocket for crypto), this polls a
-// batched REST endpoint every ~45s — matching the cache window that
-// function uses server-side, so polling faster wouldn't get fresher data
-// anyway, just waste the shared rate limit.
+// batched REST endpoint — matching the cache window that function uses
+// server-side (see the comment there), so polling faster wouldn't get
+// fresher data anyway, just waste the shared per-symbol credit quota.
 
 import { useEffect, useRef, useState } from "react";
 
-const POLL_MS = 45000;
+const POLL_MS = 300000;
 
 // One shared store + poller per unique set of symbols, so multiple
 // components asking for overlapping symbols don't each start their own

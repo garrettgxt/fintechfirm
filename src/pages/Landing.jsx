@@ -3,6 +3,7 @@ import TickerStrip from "../components/TickerStrip.jsx";
 import PriceChart from "../components/PriceChart.jsx";
 import AssetSearch from "../components/AssetSearch.jsx";
 import { useMarketQuotes } from "../hooks/useMarketQuotes.js";
+import { setPendingAsset } from "../pendingAsset.js";
 
 const HOMEPAGE_STOCKS = [
   { symbol: "AAPL", name: "Apple", type: "stock" },
@@ -51,6 +52,15 @@ const FEATURES = [
   },
 ];
 
+// A logged-out click always goes to /auth (there's no dashboard to open
+// the asset view in yet) — this remembers which asset so Dashboard.jsx
+// can open straight to it once login finishes, instead of the visitor
+// landing on a blank Portfolio tab with no memory of what they clicked.
+function goToAuth(asset) {
+  if (asset) setPendingAsset(asset);
+  window.location.href = "/auth";
+}
+
 export default function Landing() {
   const stockQuotes = useMarketQuotes(HOMEPAGE_STOCK_SYMBOLS);
 
@@ -59,7 +69,7 @@ export default function Landing() {
       <nav className="nav">
         <div className="wrap">
           <a href="/" className="brand"><span className="brand-mark"></span>Coinstate Capital</a>
-          <AssetSearch onSelect={() => (window.location.href = "/auth")} placeholder="Search stocks, ETFs, forex, crypto" />
+          <AssetSearch onSelect={goToAuth} placeholder="Search stocks, ETFs, forex, crypto" />
           <Link to="/auth" className="btn-primary" style={{ padding: "10px 20px", fontSize: 14.5 }}>
             Log in
           </Link>
@@ -94,7 +104,7 @@ export default function Landing() {
           </div>
           <div className="chart-grid">
             {["BTC", "ETH", "SOL", "LTC"].map((symbol) => (
-              <PriceChart key={symbol} symbol={symbol} onBuy={() => (window.location.href = "/auth")} />
+              <PriceChart key={symbol} symbol={symbol} onBuy={() => goToAuth({ symbol, type: "crypto" })} />
             ))}
           </div>
         </div>
@@ -114,7 +124,7 @@ export default function Landing() {
                 name={s.name}
                 type={s.type}
                 quote={stockQuotes[s.symbol]}
-                onBuy={() => (window.location.href = "/auth")}
+                onBuy={() => goToAuth(s)}
               />
             ))}
           </div>

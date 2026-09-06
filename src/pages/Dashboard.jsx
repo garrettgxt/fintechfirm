@@ -8,6 +8,7 @@ import Sparkline from "../components/Sparkline.jsx";
 import CreditInvoiceModal from "../components/CreditInvoiceModal.jsx";
 import AssetSearch from "../components/AssetSearch.jsx";
 import AssetDetailPanel from "../components/AssetDetailPanel.jsx";
+import { consumePendingAsset } from "../pendingAsset.js";
 
 export default function Dashboard() {
   const { user, logout } = usePrivy();
@@ -32,6 +33,18 @@ export default function Dashboard() {
   const walletAddress = embeddedWallet ? embeddedWallet.address : null;
 
   const email = user?.email?.address || user?.google?.email || user?.apple?.email || "";
+
+  // If a logged-out visitor clicked a stock/coin on Landing.jsx (search or
+  // a chart's Buy button), that sent them to /auth with no session to open
+  // the asset view in — resume straight to that asset's detail view now
+  // instead of leaving them on the default Portfolio tab with no memory of
+  // what they clicked. One-time on mount; consumePendingAsset clears it.
+  useEffect(() => {
+    const pending = consumePendingAsset();
+    if (!pending?.symbol) return;
+    setSelectedAsset(findAsset(pending.symbol) || pending);
+    setTab("asset");
+  }, []);
 
   // Register this wallet for the admin panel.
   useEffect(() => {

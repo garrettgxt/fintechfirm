@@ -2,11 +2,18 @@
 // Twelve Data. Crypto does NOT go through here — it uses the existing
 // Coinbase/Binance pipeline (src/hooks/useLivePrices.js).
 //
-// Twelve Data's free tier is rate-limited (8 req/min, 800/day) and that
-// limit is shared across every visitor to the site, not per-user — so
-// this caches its upstream response for ~45s using the Cache API, keyed
-// by the exact request URL. Many simultaneous visitors then share one
-// upstream call per cache window instead of each triggering their own.
+// Twelve Data's free tier is rate-limited (8 req/min, 800/day CREDITS —
+// and a batched quote request costs 1 credit PER SYMBOL, not per HTTP
+// call) and that limit is shared across every visitor to the site, not
+// per-user — so this caches its upstream response using the Cache API,
+// keyed by the exact request URL. Many simultaneous visitors then share
+// one upstream call per cache window instead of each triggering their
+// own. Confirmed in production: with the old 45s cache, a single open
+// Dashboard tab polling ~32 symbols burned the entire 800/day quota in
+// under 20 minutes (1995 credits used against an 800 cap in one session).
+// 5 minutes is still not enough for sustained heavy traffic on the free
+// tier — a paid Twelve Data plan is the real fix if this needs to hold up
+// under real usage — but it cuts the burn rate ~6.7x for now.
 //
 // SETUP (in Cloudflare dashboard):
 //   Settings > Environment variables > add:
@@ -67,7 +74,7 @@ export async function onRequest(context) {
 
     const response = new Response(JSON.stringify({ quotes }), {
       status: 200,
-      headers: { "Content-Type": "application/json", "Cache-Control": "max-age=45" },
+      headers: { "Content-Type": "application/json", "Cache-Control": "max-age=300" },
     });
     context.waitUntil(cache.put(cacheKey, response.clone()));
     return response;
