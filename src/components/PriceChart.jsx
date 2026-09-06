@@ -8,16 +8,26 @@ import TradingViewWidget from "./TradingViewWidget.jsx";
 
 // Crypto history comes from Binance's public klines endpoint (generous
 // free, keyless rate limits) via our own lightweight-charts rendering.
-// Stock/ETF/forex charts are TradingView's free embed widget instead
-// (TradingViewWidget.jsx) — Twelve Data's time_series endpoint isn't
-// batchable and was the dominant cost behind a real credit-exhaustion
-// incident (see CLAUDE.md), so non-crypto charts no longer call it at
-// all. The widget has its own built-in date-range tabs, so there's no
-// separate range toggle to build for non-crypto here.
+// Stock/ETF/forex charts are TradingView's free "Mini Chart" embed widget
+// instead (TradingViewWidget.jsx) — Twelve Data's time_series endpoint
+// isn't batchable and was the dominant cost behind a real
+// credit-exhaustion incident (see CLAUDE.md), so non-crypto charts no
+// longer call it at all. Mini Chart has no built-in range-switching UI
+// (unlike the richer "Symbol Overview" widget tried first, which also
+// duplicated our own name/symbol header — dropped for that reason), so
+// MARKET_RANGES drives our own toggle, styled like the crypto one below.
 const CRYPTO_RANGES = [
   { label: "1D", interval: "5m", limit: 288 },
   { label: "1W", interval: "1h", limit: 168 },
   { label: "1M", interval: "4h", limit: 180 },
+];
+const MARKET_RANGES = [
+  { label: "1D", tv: "1D" },
+  { label: "1M", tv: "1M" },
+  { label: "3M", tv: "3M" },
+  { label: "1Y", tv: "12M" },
+  { label: "5Y", tv: "60M" },
+  { label: "All", tv: "ALL" },
 ];
 
 const CRYPTO_LABELS = { BTC: "Bitcoin", ETH: "Ethereum", LTC: "Litecoin", SOL: "Solana" };
@@ -37,6 +47,7 @@ export default function PriceChart({ symbol, name, type = "crypto", quote, onBuy
   const chartRef = useRef(null);
   const seriesRef = useRef(null);
   const [range, setRange] = useState(CRYPTO_RANGES[0]);
+  const [marketRange, setMarketRange] = useState(MARKET_RANGES[0]);
 
   const cryptoPrices = useLivePrices();
   const live = isCrypto ? cryptoPrices[symbol] : quote;
@@ -159,7 +170,20 @@ export default function PriceChart({ symbol, name, type = "crypto", quote, onBuy
           <div ref={containerRef} className="chart-canvas" />
         </>
       ) : (
-        <TradingViewWidget tvSymbol={TV_SYMBOLS[symbol]} height={220} />
+        <>
+          <div className="chart-range-toggle">
+            {MARKET_RANGES.map((r) => (
+              <button
+                key={r.label}
+                className={r.label === marketRange.label ? "active" : ""}
+                onClick={() => setMarketRange(r)}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+          <TradingViewWidget tvSymbol={TV_SYMBOLS[symbol]} height={220} dateRange={marketRange.tv} />
+        </>
       )}
     </div>
   );

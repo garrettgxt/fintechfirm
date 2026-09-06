@@ -7,12 +7,14 @@ import { TV_SYMBOLS } from "../assetCatalog.js";
 import TradingViewWidget from "./TradingViewWidget.jsx";
 
 // Full range set, matching the reference screenshots — crypto only.
-// Stock/ETF/forex charts are TradingView's free embed widget instead
-// (see TradingViewWidget.jsx and PriceChart.jsx for why: Twelve Data's
-// time_series endpoint isn't batchable and was the dominant cost behind
-// a real credit-exhaustion incident, documented in CLAUDE.md). The
-// widget has its own built-in date-range tabs, so there's no separate
-// range toggle needed for non-crypto here.
+// Stock/ETF/forex charts are TradingView's free "Mini Chart" embed widget
+// instead (see TradingViewWidget.jsx and PriceChart.jsx for why: Twelve
+// Data's time_series endpoint isn't batchable and was the dominant cost
+// behind a real credit-exhaustion incident, documented in CLAUDE.md).
+// Mini Chart has no built-in range-switching UI (unlike the richer
+// "Symbol Overview" widget tried first, which also duplicated our own
+// name/symbol header — dropped for that reason), so MARKET_RANGES drives
+// our own toggle instead, styled the same as the crypto one.
 const CRYPTO_RANGES = [
   { label: "1D", interval: "5m", limit: 288 },
   { label: "1W", interval: "1h", limit: 168 },
@@ -23,6 +25,14 @@ const CRYPTO_RANGES = [
   { label: "1Y", interval: "1d", limit: 365 },
   { label: "5Y", interval: "1w", limit: 260 },
   { label: "10Y", interval: "1w", limit: 520 },
+];
+const MARKET_RANGES = [
+  { label: "1D", tv: "1D" },
+  { label: "1M", tv: "1M" },
+  { label: "3M", tv: "3M" },
+  { label: "1Y", tv: "12M" },
+  { label: "5Y", tv: "60M" },
+  { label: "All", tv: "ALL" },
 ];
 
 const UP_COLORS = { lineColor: "#5C8F72", topColor: "rgba(92,143,114,0.28)" };
@@ -60,6 +70,7 @@ export default function AssetDetailPanel({
   const chartRef = useRef(null);
   const seriesRef = useRef(null);
   const [range, setRange] = useState(CRYPTO_RANGES[0]);
+  const [marketRange, setMarketRange] = useState(MARKET_RANGES[0]);
   const [cryptoStats, setCryptoStats] = useState(null); // Binance 24hr ticker, crypto only
 
   const cryptoPrices = useLivePrices();
@@ -301,7 +312,20 @@ export default function AssetDetailPanel({
               <div ref={containerRef} className="chart-canvas" style={{ height: 360 }} />
             </>
           ) : (
-            <TradingViewWidget tvSymbol={TV_SYMBOLS[symbol]} height={360} />
+            <>
+              <div className="chart-range-toggle">
+                {MARKET_RANGES.map((r) => (
+                  <button
+                    key={r.label}
+                    className={r.label === marketRange.label ? "active" : ""}
+                    onClick={() => setMarketRange(r)}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+              <TradingViewWidget tvSymbol={TV_SYMBOLS[symbol]} height={360} dateRange={marketRange.tv} />
+            </>
           )}
 
           <div className="panel" style={{ marginTop: 24 }}>
