@@ -243,15 +243,32 @@
   Dashboard tab alone could burn the entire 800/day cap in under 20
   minutes. market-history.js's time_series calls are metered the same way
   per symbol+range combination, compounding it further.
-- Fix applied: market-quote.js's cache TTL went from 45s to 300s (5 min),
-  and market-history.js's went from a flat 45s to 300s for intraday
-  ranges (1D/1W) and 3600s (1hr) for daily/weekly-candle ranges (1M and
-  beyond, which don't meaningfully change minute to minute) — see the
-  comments in both files. This cuts the burn rate roughly 6-20x depending
-  on range, but does NOT remove the underlying cap — sustained real
-  traffic hitting the ~32-symbol Markets tab repeatedly can still exhaust
-  800/day. If stock/ETF/forex data needs to be reliably available under
-  real usage (not just occasional demo/dev traffic), a paid Twelve Data
+- Fix applied (round 1): market-quote.js's cache TTL went from 45s to
+  300s (5 min), and market-history.js's went from a flat 45s to 300s for
+  intraday ranges (1D/1W) and 3600s (1hr) for daily/weekly-candle ranges
+  (1M and beyond, which don't meaningfully change minute to minute) — see
+  the comments in both files.
+- Fix applied (round 2, same day): the cache change alone didn't hold —
+  usage kept climbing (1995 -> 2313 credits used) because
+  useMarketQuotes(NON_CRYPTO_SYMBOLS) in Dashboard.jsx ran
+  UNCONDITIONALLY at the top of the component, polling all ~32 symbols
+  every 5 minutes for as long as the Dashboard was mounted regardless of
+  which tab was actually open — a user sitting on Portfolio the whole
+  time still cost 32 credits per poll. Replaced the fixed symbol list
+  with `neededNonCryptoSymbols` (useMemo, computed from `tab`,
+  `demoPositions`, `selectedAsset`, `pendingOrders`): the full board only
+  while the Markets tab is open, otherwise just symbols behind an actual
+  position, a pending limit order, or the single asset being viewed.
+  Portfolio-only sessions with no stock/forex exposure now cost 0
+  credits instead of 32 every 5 minutes.
+- Neither fix restores an already-exhausted day's quota — only Twelve
+  Data's own daily reset (or a plan upgrade) does that. And neither
+  removes the underlying cap: sustained real traffic actually using the
+  Markets tab, or several concurrent users, can still exhaust 800/day —
+  the fixes only stop the app from wasting credits on data nobody's
+  looking at. If stock/ETF/forex data needs to be reliably available
+  under real usage (not just occasional demo/dev traffic), a paid Twelve
+  Data
   plan (removes the daily cap) is the actual fix — flag this to the user
   rather than continuing to shrink cache windows if it recurs.
 - Just as important: PriceChart.jsx does NOT poll its own quote for
