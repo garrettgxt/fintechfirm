@@ -281,11 +281,11 @@ export default function Dashboard() {
           <h1 className="serif" style={{ fontSize: 20, flexShrink: 0 }}>
             {tab === "markets" ? "Markets" : tab === "asset" ? selectedAsset?.symbol : "Portfolio"}
           </h1>
-          <div style={{ flex: 1, display: "flex", justifyContent: "center", padding: "0 24px" }}>
+          <div className="topbar-search-wrap" style={{ flex: 1, display: "flex", justifyContent: "center", padding: "0 24px" }}>
             <AssetSearch onSelect={handleSearchSelect} />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 16, flexShrink: 0 }}>
-            <span style={{ fontSize: 13.5, color: "rgba(237,231,218,0.6)" }}>{email}</span>
+            <span className="topbar-email" style={{ fontSize: 13.5, color: "rgba(237,231,218,0.6)" }}>{email}</span>
             <button className="btn-secondary" onClick={logout}>Log out</button>
           </div>
         </div>
@@ -444,6 +444,25 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      <nav className="mobile-nav">
+        <button className={tab === "portfolio" ? "active" : ""} onClick={() => setTab("portfolio")}>
+          <span className="mobile-nav-icon">◆</span>
+          Portfolio
+        </button>
+        <button className={tab === "markets" ? "active" : ""} onClick={() => setTab("markets")}>
+          <span className="mobile-nav-icon">↗</span>
+          Markets
+        </button>
+        <button className="mobile-nav-add" onClick={() => openAddFunds()}>
+          <span className="mobile-nav-icon">＋</span>
+          Add funds
+        </button>
+        <button disabled title="Coming soon">
+          <span className="mobile-nav-icon">⚙</span>
+          Settings
+        </button>
+      </nav>
 
       {creditOpen && (
         <CreditInvoiceModal

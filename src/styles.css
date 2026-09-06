@@ -77,6 +77,32 @@ button:disabled{ opacity:0.55; cursor:not-allowed; }
 .content{ padding:40px; max-width:1100px; }
 @media (max-width:640px){ .content{ padding:24px 20px; } .topbar{ padding:18px 20px; } }
 
+/* Mobile bottom nav — the sidebar disappears below 860px (.sidebar rule
+   above) with nothing replacing it, which left mobile users with no way
+   to reach Markets/Add funds/Settings at all. This is the replacement:
+   fixed to the bottom of the viewport, same 4 actions as the sidebar. */
+.mobile-nav{ display:none; }
+@media (max-width:860px){
+  .topbar{ flex-wrap:wrap; row-gap:12px; }
+  .topbar-email{ display:none; }
+  .topbar-search-wrap{ flex-basis:100%; order:3; padding:0 !important; justify-content:stretch !important; }
+  .topbar-search-wrap .asset-search{ max-width:none; width:100%; }
+  .mobile-nav{
+    display:flex; position:fixed; bottom:0; left:0; right:0; z-index:30;
+    background:rgba(15,29,27,0.97); backdrop-filter:blur(10px);
+    border-top:1px solid var(--line); padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+  }
+  .mobile-nav button{
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
+    background:none; border:none; color:rgba(237,231,218,0.55); font-size:10.5px;
+    font-family:inherit; padding:7px 2px; cursor:pointer; border-radius:6px;
+  }
+  .mobile-nav button.active{ color:var(--brass-bright); }
+  .mobile-nav-icon{ font-size:18px; line-height:1; }
+  .mobile-nav-add .mobile-nav-icon{ color:var(--brass-bright); }
+  .content{ padding-bottom:88px; }
+}
+
 .balance-card{ background:var(--ink-2); border:1px solid var(--line); border-radius:6px; padding:36px; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:24px; margin-bottom:32px; position:relative; overflow:hidden; }
 
 .balance-label{ font-size:13px; color:rgba(237,231,218,0.55); margin-bottom:10px; }
@@ -106,7 +132,14 @@ footer .fine{ font-size:12.5px; color:rgba(237,231,218,0.4); max-width:640px; li
 .ticker-strip{ display:flex; gap:14px; flex-wrap:wrap; padding:20px 24px; background:var(--ink-2); border:1px solid var(--line); border-radius:8px; }
 .ticker-item{ flex:1; min-width:150px; display:flex; align-items:center; gap:12px; padding:4px 14px; border-right:1px solid var(--line); }
 .ticker-item:last-child{ border-right:none; }
-@media (max-width:720px){ .ticker-item{ border-right:none; border-bottom:1px solid var(--line); padding-bottom:14px; } }
+@media (max-width:720px){
+  /* flex:1 + min-width:150px still let two items share a row on most
+     phones (150px x 2 fits inside a ~360-400px viewport), which is what
+     made adjacent items' text visually collide — force one per row
+     instead of just adjusting borders. */
+  .ticker-item{ flex:1 1 100%; min-width:0; border-right:none; border-bottom:1px solid var(--line); padding-bottom:14px; }
+  .ticker-item:last-child{ border-bottom:none; padding-bottom:4px; }
+}
 .ticker-symbol{ font-family:'Fraunces',serif; font-size:15px; font-weight:500; width:34px; flex-shrink:0; }
 .ticker-price{ font-size:14px; flex-shrink:0; min-width:78px; }
 .ticker-change{ font-size:12.5px; font-weight:600; margin-left:auto; }
