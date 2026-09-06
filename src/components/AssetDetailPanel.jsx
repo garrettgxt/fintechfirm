@@ -243,6 +243,29 @@ export default function AssetDetailPanel({
       : null;
   const estimatedCost = quantity != null && Number.isFinite(refPrice) ? quantity * refPrice : null;
 
+  // "Max" puts the most this order could possibly use into the amount
+  // field: all remaining demo cash (buy) or the full held quantity
+  // (sell), converted to whichever unit (dollars/shares) is currently
+  // selected using the same refPrice the rest of the panel uses. Rounded
+  // DOWN (never up) so the follow-on quantity/cost math never lands a
+  // hair over the true limit from floating-point rounding.
+  function floorTo(value, decimals) {
+    const f = Math.pow(10, decimals);
+    return Math.floor(value * f) / f;
+  }
+  const maxAmount = (() => {
+    if (side === "buy") {
+      if (!Number.isFinite(cashUsd) || cashUsd <= 0) return null;
+      if (buyIn === "dollars") return floorTo(cashUsd, 2);
+      if (!Number.isFinite(refPrice) || refPrice <= 0) return null;
+      return floorTo(cashUsd / refPrice, 6);
+    }
+    if (!holdingQuantity || holdingQuantity <= 0) return null;
+    if (buyIn === "shares") return floorTo(holdingQuantity, 6);
+    if (!Number.isFinite(refPrice) || refPrice <= 0) return null;
+    return floorTo(holdingQuantity * refPrice, 2);
+  })();
+
   const overBudget = side === "buy" && estimatedCost != null && estimatedCost > cashUsd;
   const overHolding = side === "sell" && quantity != null && quantity > holdingQuantity;
   const limitInvalid = orderType === "limit" && (!Number.isFinite(parseFloat(limitPrice)) || parseFloat(limitPrice) <= 0);
@@ -465,16 +488,31 @@ export default function AssetDetailPanel({
                   {isCrypto ? "Coins" : "Shares"}
                 </button>
               </div>
-              <input
-                type="number"
-                min="0"
-                step="any"
-                placeholder={buyIn === "dollars" ? "Amount in USD" : `Number of ${symbol}`}
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="credit-custom-amount num"
-                style={{ marginBottom: 16 }}
-              />
+              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder={buyIn === "dollars" ? "Amount in USD" : `Number of ${symbol}`}
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="credit-custom-amount num"
+                  style={{ flex: 1, marginBottom: 0 }}
+                />
+                <button
+                  type="button"
+                  className="credit-chip"
+                  onClick={() => setAmount(String(maxAmount))}
+                  disabled={maxAmount == null}
+                  title={
+                    side === "buy"
+                      ? "Use all available demo cash"
+                      : `Use your full ${symbol} holding`
+                  }
+                >
+                  Max
+                </button>
+              </div>
 
               {quantity != null && (
                 <div style={{ fontSize: 13, color: "rgba(237,231,218,0.7)", marginBottom: 16 }}>
