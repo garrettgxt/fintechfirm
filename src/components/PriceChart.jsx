@@ -2,6 +2,30 @@ import { useEffect, useRef, useState } from "react";
 import { createChart, AreaSeries } from "lightweight-charts";
 import { useLivePrices } from "../hooks/useLivePrices.js";
 
+// A page can mount many cards at once (e.g. 30+ on the Markets tab), and
+// unlike quotes (batched into one request by the caller), each card's
+// history is its own separate call to Twelve Data — whose free tier is
+// only 8 requests/minute, shared across every visitor. Without this,
+// a page full of cards trips that limit immediately (confirmed in
+// production: a 6-card page alone was enough to get every card a 429).
+// This queue serializes market-history requests with a fixed gap between
+// them so a big page drains through the limit instead of overrunning it;
+// crypto history (Binance, generous limits) skips this entirely.
+let historyQueueTail = Promise.resolve();
+const HISTORY_MIN_GAP_MS = 4000;
+
+function enqueueHistoryFetch(run) {
+  const result = historyQueueTail.then(async () => {
+    try {
+      return await run();
+    } finally {
+      await new Promise((r) => setTimeout(r, HISTORY_MIN_GAP_MS));
+    }
+  });
+  historyQueueTail = result.catch(() => {});
+  return result;
+}
+
 // Crypto history comes from Binance's public klines endpoint (generous
 // free, keyless rate limits). Stock/ETF/forex history comes from
 // functions/market-history.js (Twelve Data, proxied — see that file for
@@ -100,11 +124,13 @@ export default function PriceChart({ symbol, name, type = "crypto", quote, onBuy
       ? `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${range.interval}&limit=${range.limit}`
       : `/market-history?symbol=${encodeURIComponent(symbol)}&interval=${range.interval}&outputsize=${range.outputsize}`;
 
+    const maxAttempts = isCrypto ? 3 : 4;
+
     async function loadWithRetry() {
-      for (let attempt = 0; attempt < 3; attempt++) {
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
         if (cancelled) return;
         try {
-          const res = await fetch(url);
+          const res = isCrypto ? await fetch(url) : await enqueueHistoryFetch(() => fetch(url));
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const data = await res.json();
           if (cancelled || !seriesRef.current) return;
@@ -130,8 +156,10 @@ export default function PriceChart({ symbol, name, type = "crypto", quote, onBuy
           chartRef.current?.timeScale().fitContent();
           return;
         } catch (err) {
-          if (attempt === 2) console.error(`Failed to load ${symbol} history:`, err);
-          else await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+          if (attempt === maxAttempts - 1) console.error(`Failed to load ${symbol} history:`, err);
+          else if (isCrypto) await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+          // Non-crypto retries already wait via the queue's fixed gap —
+          // a 429 needs real time to pass, so no extra backoff here.
         }
       }
     }

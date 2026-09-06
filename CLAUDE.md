@@ -128,11 +128,23 @@
   quote for non-crypto symbols — it takes a `quote` prop instead, fed by
   ONE batched src/hooks/useMarketQuotes.js call in the parent
   (Dashboard.jsx polls all of src/assetCatalog.js's NON_CRYPTO_SYMBOLS at
-  once; Landing.jsx polls just its 4 homepage symbols). If you add a new
+  once; Landing.jsx polls just its 4-6 homepage symbols). If you add a new
   place that renders PriceChart for non-crypto symbols, do the same —
   don't let PriceChart call useMarketQuotes itself, or a screen full of
   cards fans out into many separate upstream calls and blows through the
   rate limit.
+- market-history.js does NOT have the same batching option as quotes —
+  Twelve Data's time_series endpoint is one symbol per call, so every
+  PriceChart card fetches its own history independently. Confirmed in
+  production: a page with just 6 non-crypto cards was enough to 429
+  every one of them. PriceChart.jsx now serializes ALL non-crypto history
+  fetches through a shared module-level queue (`enqueueHistoryFetch`,
+  ~4s between requests) so a big page (Dashboard's Markets tab has 30+
+  non-crypto cards) drains through the free-tier limit over time instead
+  of overrunning it immediately — expect stock/ETF/forex charts to fill
+  in gradually rather than all at once on a page with many cards. Crypto
+  history (Binance) isn't affected — its limits are generous enough that
+  this was never a problem there.
 - src/assetCatalog.js is the curated catalog (~24 stocks, 3 index ETFs,
   5 forex pairs, 12 crypto) — deliberately not "all stocks/every pair",
   which isn't realistically buildable; scoped down with the user.
