@@ -6,7 +6,8 @@ import { useMarketQuotes } from "../hooks/useMarketQuotes.js";
 import PriceChart from "../components/PriceChart.jsx";
 import Sparkline from "../components/Sparkline.jsx";
 import CreditInvoiceModal from "../components/CreditInvoiceModal.jsx";
-import TradeModal from "../components/TradeModal.jsx";
+import AssetSearch from "../components/AssetSearch.jsx";
+import AssetDetailPanel from "../components/AssetDetailPanel.jsx";
 
 export default function Dashboard() {
   const { user, logout } = usePrivy();
@@ -19,7 +20,8 @@ export default function Dashboard() {
   const [creditOpen, setCreditOpen] = useState(false);
   const [creditCurrency, setCreditCurrency] = useState("eth"); // which coin is preselected when the modal opens
   const [creditBalance, setCreditBalance] = useState(0); // custodial site-credit balance, NOT on-chain funds
-  const [tradeModal, setTradeModal] = useState(null); // { symbol, name, assetType, side, price, holdingQuantity }
+  const [selectedAsset, setSelectedAsset] = useState(null); // asset object when tab === "asset"
+  const [pendingOrders, setPendingOrders] = useState([]);
   const prevDisplayedValue = useRef(null);
   const deltaTimeout = useRef(null);
   const livePrices = useLivePrices();
@@ -71,6 +73,62 @@ export default function Dashboard() {
 
   useEffect(refreshCreditBalance, [walletAddress]);
 
+  // Pending Demo Mode limit orders for this wallet.
+  function refreshPendingOrders() {
+    if (!walletAddress) return;
+    fetch(`/get-demo-orders?wallet=${encodeURIComponent(walletAddress)}`)
+      .then((res) => res.json())
+      .then((data) => setPendingOrders(data.orders ?? []))
+      .catch((err) => console.error("Failed to fetch pending orders:", err));
+  }
+
+  useEffect(refreshPendingOrders, [walletAddress, demoMode]);
+
+  // Limit orders only fill while this effect is alive — i.e. while this
+  // wallet's own Dashboard tab is open. There's no background scheduler
+  // (Cloudflare Pages has no built-in cron); this is a known, accepted
+  // tradeoff for a demo feature, documented in CLAUDE.md.
+  useEffect(() => {
+    if (!demoMode || pendingOrders.length === 0) return;
+    let cancelled = false;
+
+    async function checkOrders() {
+      for (const order of pendingOrders) {
+        if (cancelled) return;
+        const currentPrice = getPrice(order.symbol, order.assetType);
+        if (currentPrice == null) continue;
+        const shouldFill =
+          (order.side === "buy" && currentPrice <= order.limitPrice) ||
+          (order.side === "sell" && currentPrice >= order.limitPrice);
+        if (!shouldFill) continue;
+        try {
+          await fetch("/fill-demo-order", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ orderId: order.id, fillPrice: currentPrice }),
+          });
+          refreshPendingOrders();
+          refreshDemoPortfolio();
+        } catch (err) {
+          console.error("Failed to fill order:", err);
+        }
+      }
+    }
+
+    checkOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demoMode, pendingOrders, livePrices, marketQuotes]);
+
+  function cancelOrder(orderId) {
+    fetch("/cancel-demo-order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId, walletAddress }),
+    })
+      .then(() => refreshPendingOrders())
+      .catch((err) => console.error("Failed to cancel order:", err));
+  }
+
   // Current price for any catalog symbol, from whichever live feed
   // covers it — used for portfolio valuation and the trade modal's
   // estimate. Falls back to null (caller decides how to handle that).
@@ -114,29 +172,27 @@ export default function Dashboard() {
     setCreditOpen(true);
   }
 
-  // Opens the Demo Mode buy/sell modal for one catalog asset.
-  function openTrade(asset, side) {
-    const holding = demoPositions.find((p) => p.symbol === asset.symbol);
-    setTradeModal({
-      symbol: asset.symbol,
-      name: asset.name,
-      assetType: asset.type,
-      side,
-      price: getPrice(asset.symbol, asset.type),
-      holdingQuantity: holding?.quantity ?? 0,
-    });
+  // Opens the full asset detail view (chart, market details, buy/sell panel).
+  function openAsset(asset) {
+    setSelectedAsset(asset);
+    setTab("asset");
   }
 
-  // A card's Buy button: Demo Mode trades any asset; a real account can
-  // only "buy" crypto today, and that means funding Site Credit, not a
-  // simulated trade — real stock/forex investing isn't built yet.
+  // A card's Buy button: Demo Mode opens the asset detail view; a real
+  // account can only "buy" crypto today, and that means funding Site
+  // Credit, not a simulated trade — real stock/forex investing isn't
+  // built yet.
   function handleBuy(asset) {
-    if (demoMode) openTrade(asset, "buy");
+    if (demoMode) openAsset(asset);
     else if (asset.type === "crypto") openAddFunds(asset.symbol);
   }
 
   function handleSell(asset) {
-    if (demoMode) openTrade(asset, "sell");
+    if (demoMode) openAsset(asset);
+  }
+
+  function handleSearchSelect(asset) {
+    openAsset(asset);
   }
 
   function renderAssetGroup(title, assets) {
@@ -186,14 +242,35 @@ export default function Dashboard() {
 
       <div className="main">
         <div className="topbar">
-          <h1 className="serif" style={{ fontSize: 20 }}>{tab === "markets" ? "Markets" : "Portfolio"}</h1>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <h1 className="serif" style={{ fontSize: 20, flexShrink: 0 }}>
+            {tab === "markets" ? "Markets" : tab === "asset" ? selectedAsset?.symbol : "Portfolio"}
+          </h1>
+          <div style={{ flex: 1, display: "flex", justifyContent: "center", padding: "0 24px" }}>
+            <AssetSearch onSelect={handleSearchSelect} />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 16, flexShrink: 0 }}>
             <span style={{ fontSize: 13.5, color: "rgba(237,231,218,0.6)" }}>{email}</span>
             <button className="btn-secondary" onClick={logout}>Log out</button>
           </div>
         </div>
 
-        {tab === "markets" ? (
+        {tab === "asset" && selectedAsset ? (
+          <div className="content">
+            <AssetDetailPanel
+              asset={selectedAsset}
+              quote={selectedAsset.type !== "crypto" ? marketQuotes[selectedAsset.symbol] : undefined}
+              walletAddress={walletAddress}
+              demoMode={demoMode}
+              cashUsd={demoCashUsd}
+              holdingQuantity={demoPositions.find((p) => p.symbol === selectedAsset.symbol)?.quantity ?? 0}
+              onBack={() => setTab("markets")}
+              onTraded={() => {
+                refreshDemoPortfolio();
+                refreshPendingOrders();
+              }}
+            />
+          </div>
+        ) : tab === "markets" ? (
           <div className="content">
             {demoMode && (
               <div style={{ fontSize: 12.5, color: "var(--brass-bright)", marginBottom: 24 }}>
@@ -289,7 +366,7 @@ export default function Dashboard() {
                                 <button
                                   className="btn-secondary"
                                   style={{ marginTop: 8, padding: "4px 10px", fontSize: 12 }}
-                                  onClick={() => asset && openTrade(asset, "sell")}
+                                  onClick={() => asset && openAsset(asset)}
                                 >
                                   Sell
                                 </button>
@@ -303,6 +380,39 @@ export default function Dashboard() {
                     <div className="empty-state">No holdings yet — buy something on the Markets tab.</div>
                   )}
                 </div>
+
+                {pendingOrders.length > 0 && (
+                  <div className="pending-orders-panel">
+                    <table>
+                      <thead>
+                        <tr><th>Pending order</th><th>Quantity</th><th>Limit price</th><th></th></tr>
+                      </thead>
+                      <tbody>
+                        {pendingOrders.map((o) => (
+                          <tr key={o.id}>
+                            <td>
+                              <div style={{ fontWeight: 600 }}>{o.symbol}</div>
+                              <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>
+                                {o.side === "buy" ? "Buy" : "Sell"} limit
+                              </div>
+                            </td>
+                            <td className="num">{o.quantity}</td>
+                            <td className="num">${Number(o.limitPrice).toFixed(2)}</td>
+                            <td style={{ textAlign: "right" }}>
+                              <button
+                                className="btn-secondary"
+                                style={{ padding: "4px 10px", fontSize: 12 }}
+                                onClick={() => cancelOrder(o.id)}
+                              >
+                                Cancel
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -315,21 +425,6 @@ export default function Dashboard() {
           initialCurrency={creditCurrency}
           onClose={() => setCreditOpen(false)}
           onCredited={refreshCreditBalance}
-        />
-      )}
-
-      {tradeModal && (
-        <TradeModal
-          walletAddress={walletAddress}
-          symbol={tradeModal.symbol}
-          name={tradeModal.name}
-          assetType={tradeModal.assetType}
-          side={tradeModal.side}
-          price={tradeModal.price}
-          cashUsd={demoCashUsd}
-          holdingQuantity={tradeModal.holdingQuantity}
-          onClose={() => setTradeModal(null)}
-          onTraded={refreshDemoPortfolio}
         />
       )}
     </div>

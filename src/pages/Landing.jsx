@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import TickerStrip from "../components/TickerStrip.jsx";
 import PriceChart from "../components/PriceChart.jsx";
+import AssetSearch from "../components/AssetSearch.jsx";
 import { useMarketQuotes } from "../hooks/useMarketQuotes.js";
 
 const HOMEPAGE_STOCKS = [
@@ -58,6 +59,7 @@ export default function Landing() {
       <nav className="nav">
         <div className="wrap">
           <a href="/" className="brand"><span className="brand-mark"></span>Coinstate Capital</a>
+          <AssetSearch onSelect={() => (window.location.href = "/auth")} placeholder="Search stocks, ETFs, forex, crypto" />
           <Link to="/auth" className="btn-primary" style={{ padding: "10px 20px", fontSize: 14.5 }}>
             Log in
           </Link>

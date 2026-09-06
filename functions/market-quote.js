@@ -39,15 +39,29 @@ export async function onRequest(context) {
 
     // A single symbol returns one object; multiple symbols return
     // { "AAPL": {...}, "TSLA": {...} } — normalize to an array either way.
+    const num = (v) => {
+      const n = parseFloat(v);
+      return Number.isFinite(n) ? n : null;
+    };
     const symbols = symbolsParam.split(",");
     const quotes = symbols.map((symbol) => {
       const entry = symbols.length === 1 ? data : data[symbol];
-      const price = parseFloat(entry?.close);
-      const percentChange = parseFloat(entry?.percent_change);
       return {
         symbol,
-        price: Number.isFinite(price) ? price : null,
-        changePct: Number.isFinite(percentChange) ? percentChange : null,
+        price: num(entry?.close),
+        changePct: num(entry?.percent_change),
+        // Extra fields for the asset detail page's "Market details" —
+        // only what Twelve Data's quote response actually provides, no
+        // faked/estimated values for anything it doesn't.
+        open: num(entry?.open),
+        high: num(entry?.high),
+        low: num(entry?.low),
+        previousClose: num(entry?.previous_close),
+        volume: num(entry?.volume),
+        avgVolume: num(entry?.average_volume),
+        fiftyTwoWeekHigh: num(entry?.fifty_two_week?.high),
+        fiftyTwoWeekLow: num(entry?.fifty_two_week?.low),
+        exchange: entry?.exchange ?? null,
       };
     });
 

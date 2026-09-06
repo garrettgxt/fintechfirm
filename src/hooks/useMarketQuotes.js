@@ -30,7 +30,10 @@ async function poll(key, symbols) {
     const data = await res.json();
     if (!res.ok || !Array.isArray(data.quotes)) return;
     for (const q of data.quotes) {
-      store.quotes[q.symbol] = { price: q.price, changePct: q.changePct };
+      // Keep the whole quote (price/changePct plus open/high/low/volume/
+      // 52-week/exchange) — the asset detail page's "Market details"
+      // needs those, not just price/changePct.
+      store.quotes[q.symbol] = q;
     }
     for (const listener of store.listeners) listener();
   } catch (err) {

@@ -110,6 +110,69 @@
   (with P&L per position) only when demo_mode is true; a real account
   shows neither, just the Site Credit balance.
 
+## Search, Asset Detail Page, and Limit Orders (Demo Mode)
+- src/components/AssetSearch.jsx: client-side search over the static
+  src/assetCatalog.js (no backend — it's a fixed list), with category
+  chips for Stocks/ETFs/Forex/Crypto only (no Options/Futures/IPOs/
+  Earnings — scoped down from the user's reference screenshots since
+  there's no real data source for those). Rendered in Landing.jsx's nav
+  (selecting a result sends a visitor to /auth) and Dashboard.jsx's
+  topbar (selecting a result opens the asset detail view below).
+- src/components/AssetDetailPanel.jsx: the per-asset page (big chart +
+  "Market details" stats + Buy/Sell panel), rendered as a third internal
+  view in Dashboard.jsx (`tab === "asset"` + `selectedAsset` state) rather
+  than a new router route, so it shares the existing sidebar/topbar chrome
+  the same way Portfolio/Markets already do. This fully replaced the old
+  standalone TradeModal.jsx popup, which was deleted.
+  - Chart: full range set (1D/1W/1M/3M/6M/YTD/1Y/5Y/10Y) via the new
+    src/hooks/useAssetHistory.js, extracted out of PriceChart.jsx so both
+    the compact cards (1D/1W/1M only) and this page share the same
+    fetch/retry logic — including the Twelve Data rate-limit queue.
+  - "Market details" grid: for stock/ETF/forex, only fields Twelve Data's
+    /quote endpoint actually returns (open/high/low/previous close/
+    volume/average volume/52-week high-low/exchange) — functions/
+    market-quote.js was extended to pass these through, and
+    useMarketQuotes.js now keeps the whole quote object instead of just
+    price/changePct. For crypto, there's no 52-week or exchange data from
+    our feeds, so this page fetches Binance's public `/api/v3/ticker/24hr`
+    client-side instead (same Cloudflare-Workers-get-blocked reasoning as
+    everywhere else Binance is used — see below) for real 24hr open/high/
+    low/volume; nothing is faked for what a feed doesn't provide.
+  - Buy/Sell panel: Buy/Sell tabs, an Order type dropdown (Market/Limit),
+    and a Dollars vs Shares/Coins toggle (enter either side, quantity is
+    derived from the current or limit price). Market orders reuse the
+    existing functions/demo-trade.js path unchanged; Limit orders go
+    through the new order-book endpoints below. Demo Mode only — if
+    demo_mode is off, this panel shows an explanatory message instead of
+    trading, since real stock/ETF/forex investing isn't built.
+- New `demo_orders` table + Postgres functions (supabase/migrations/
+  20260906024501_add_demo_orders.sql): `create_demo_order` (validates
+  demo_mode + positive qty/price, inserts a `pending` row — does NOT
+  escrow funds/position upfront), `fill_demo_order` (re-validates and
+  delegates to the existing `apply_demo_trade` for the actual cash/
+  position effect, marking the order `filled` or `failed`), and
+  `cancel_demo_order`. New functions: create-demo-order.js,
+  fill-demo-order.js, cancel-demo-order.js, get-demo-orders.js — same
+  known-error-string-matching pattern as demo-trade.js.
+- IMPORTANT LIMITATION: limit orders only execute while that wallet's own
+  Dashboard tab is open. Dashboard.jsx has an effect that watches its own
+  pending orders (fetched via get-demo-orders.js) against the live prices
+  it already holds (useLivePrices for crypto, useMarketQuotes for stock/
+  ETF/forex) and calls fill-demo-order.js the moment a buy-limit's price
+  drops to/below its limit or a sell-limit's price rises to/above it.
+  There is NO background scheduler — Cloudflare Pages has no built-in
+  cron — so an order placed and left with the tab closed will NOT fill
+  until the user reopens the dashboard. This was an explicit, user-
+  approved tradeoff ("check while the app is open") for a demo feature;
+  don't assume orders fill in the background without checking with the
+  user first if this ever needs to change.
+- Pending orders show in the Portfolio tab (symbol, side, quantity, limit
+  price, Cancel button) whenever any exist for that wallet.
+- fill-demo-order.js trusts the client-supplied fill price for the same
+  reason as demo-trade.js (Binance blocks Cloudflare Workers' own
+  outbound IPs — see Demo Mode below) — acceptable only because of the
+  demo_mode gate.
+
 ## Market Data for Stocks/ETFs/Forex (Twelve Data)
 - Crypto is untouched — still Coinbase WS (live ticks) + Binance klines
   (history), see Live Market Data above. Stocks/ETFs/forex use a

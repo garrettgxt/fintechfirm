@@ -1,35 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { createChart, AreaSeries } from "lightweight-charts";
 import { useLivePrices } from "../hooks/useLivePrices.js";
-
-// A page can mount many cards at once (e.g. 30+ on the Markets tab), and
-// unlike quotes (batched into one request by the caller), each card's
-// history is its own separate call to Twelve Data — whose free tier is
-// only 8 requests/minute, shared across every visitor. Without this,
-// a page full of cards trips that limit immediately (confirmed in
-// production: a 6-card page alone was enough to get every card a 429).
-// This queue serializes market-history requests with a fixed gap between
-// them so a big page drains through the limit instead of overrunning it;
-// crypto history (Binance, generous limits) skips this entirely.
-let historyQueueTail = Promise.resolve();
-const HISTORY_MIN_GAP_MS = 4000;
-
-function enqueueHistoryFetch(run) {
-  const result = historyQueueTail.then(async () => {
-    try {
-      return await run();
-    } finally {
-      await new Promise((r) => setTimeout(r, HISTORY_MIN_GAP_MS));
-    }
-  });
-  historyQueueTail = result.catch(() => {});
-  return result;
-}
+import { useAssetHistory } from "../hooks/useAssetHistory.js";
 
 // Crypto history comes from Binance's public klines endpoint (generous
 // free, keyless rate limits). Stock/ETF/forex history comes from
-// functions/market-history.js (Twelve Data, proxied — see that file for
-// why it's cached server-side).
+// functions/market-history.js (Twelve Data, proxied — see that file, and
+// useAssetHistory.js, for why it's queued/cached server- and client-side).
 const CRYPTO_RANGES = [
   { label: "1D", interval: "5m", limit: 288 },
   { label: "1W", interval: "1h", limit: 168 },
@@ -46,12 +23,12 @@ const CRYPTO_LABELS = { BTC: "Bitcoin", ETH: "Ethereum", LTC: "Litecoin", SOL: "
 const UP_COLORS = { lineColor: "#5C8F72", topColor: "rgba(92,143,114,0.28)" };
 const DOWN_COLORS = { lineColor: "#A25A45", topColor: "rgba(162,90,69,0.28)" };
 
-// For type !== "crypto", pass `quote` ({price, changePct}) from a single
-// batched useMarketQuotes call in the parent — a card doesn't poll its
-// own quote, since a screen full of cards would each fire a separate
-// upstream request and blow through Twelve Data's free-tier rate limit.
-// Crypto keeps using its own useLivePrices() call directly; that's a
-// shared WebSocket singleton, so per-card use is free.
+// For type !== "crypto", pass `quote` (from useMarketQuotes) from a single
+// batched call in the parent — a card doesn't poll its own quote, since a
+// screen full of cards would each fire a separate upstream request and
+// blow through Twelve Data's free-tier rate limit. Crypto keeps using its
+// own useLivePrices() call directly; that's a shared WebSocket singleton,
+// so per-card use is free.
 export default function PriceChart({ symbol, name, type = "crypto", quote, onBuy, onSell, holdingQuantity }) {
   const isCrypto = type === "crypto";
   const ranges = isCrypto ? CRYPTO_RANGES : MARKET_RANGES;
@@ -64,6 +41,7 @@ export default function PriceChart({ symbol, name, type = "crypto", quote, onBuy
   const live = isCrypto ? cryptoPrices[symbol] : quote;
   const isUp = (live?.changePct ?? live?.changePct24h ?? 0) >= 0;
   const changePct = live?.changePct ?? live?.changePct24h ?? null;
+  const points = useAssetHistory(symbol, type, range);
 
   // Create the chart once per mounted card.
   useEffect(() => {
@@ -117,58 +95,12 @@ export default function PriceChart({ symbol, name, type = "crypto", quote, onBuy
     seriesRef.current?.applyOptions(isUp ? UP_COLORS : DOWN_COLORS);
   }, [isUp]);
 
-  // Load real history for the selected range.
+  // Push newly-loaded history into the chart.
   useEffect(() => {
-    let cancelled = false;
-    const url = isCrypto
-      ? `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${range.interval}&limit=${range.limit}`
-      : `/market-history?symbol=${encodeURIComponent(symbol)}&interval=${range.interval}&outputsize=${range.outputsize}`;
-
-    const maxAttempts = isCrypto ? 3 : 4;
-
-    async function loadWithRetry() {
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        if (cancelled) return;
-        try {
-          const res = isCrypto ? await fetch(url) : await enqueueHistoryFetch(() => fetch(url));
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const data = await res.json();
-          if (cancelled || !seriesRef.current) return;
-
-          let points;
-          if (isCrypto) {
-            if (!Array.isArray(data)) throw new Error("Unexpected response shape");
-            const seen = new Set();
-            points = [];
-            for (const candle of data) {
-              const time = Math.floor(candle[0] / 1000);
-              const close = parseFloat(candle[4]);
-              if (seen.has(time) || Number.isNaN(close)) continue;
-              seen.add(time);
-              points.push({ time, value: close });
-            }
-          } else {
-            if (!Array.isArray(data.points)) throw new Error(data.error || "Unexpected response shape");
-            points = data.points;
-          }
-
-          seriesRef.current.setData(points);
-          chartRef.current?.timeScale().fitContent();
-          return;
-        } catch (err) {
-          if (attempt === maxAttempts - 1) console.error(`Failed to load ${symbol} history:`, err);
-          else if (isCrypto) await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
-          // Non-crypto retries already wait via the queue's fixed gap —
-          // a 429 needs real time to pass, so no extra backoff here.
-        }
-      }
-    }
-
-    loadWithRetry();
-    return () => {
-      cancelled = true;
-    };
-  }, [symbol, range, isCrypto]);
+    if (!points || !seriesRef.current) return;
+    seriesRef.current.setData(points);
+    chartRef.current?.timeScale().fitContent();
+  }, [points]);
 
   // Append each new price (real-time tick for crypto, polled quote for
   // stock/forex) onto the end of the chart.
