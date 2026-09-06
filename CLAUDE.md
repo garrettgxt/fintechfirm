@@ -305,8 +305,22 @@
   with AAPL/TSLA/NVDA/NFLX prices actually observed via Twelve Data
   earlier that same session, so Demo buys for those worked immediately
   rather than waiting for the next successful fetch — not fabricated
-  data, just not live-fresh. The other 7 non-crypto symbols populate
-  themselves the next time Twelve Data succeeds.
+  data, just not live-fresh.
+- IMPORTANT FOLLOW-UP (2026-09-06, later same day): a real tester tried
+  to buy a "random stock" and couldn't — Twelve Data's quota never
+  recovered (4300+ credits used against 800/day, still climbing from
+  ordinary site traffic alone, even with every optimization already
+  applied), so only the 4 seeded symbols ever got a price; the other 7
+  (MSFT, AMZN, SPY, QQQ, DIA, EUR/USD, USD/JPY) stayed permanently null —
+  a coin-flip chance of hitting "Waiting for a live price..." on any
+  given symbol. Seeded those 7 too (supabase/migrations/
+  20260906090000_seed_remaining_quote_cache.sql) — this time with
+  APPROXIMATE current-range price levels, not empirically observed
+  (changePct left null rather than guessed). All 11 non-crypto catalog
+  symbols now return a usable price regardless of Twelve Data's state.
+  Real values overwrite these automatically the next time Twelve Data
+  succeeds for a symbol. If this recurs for a newly-added symbol, same
+  fix: insert a row into `market_quote_cache` with at least a `price`.
 - The fallback cache above only ever had real price/changePct for these
   symbols — never the fuller "Market details" field set (open/high/low/
   previousClose/volume/avgVolume/52-week high-low/exchange), so that grid

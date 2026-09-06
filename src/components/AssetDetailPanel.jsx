@@ -498,7 +498,7 @@ export default function AssetDetailPanel({
                 {submitting
                   ? "Placing order…"
                   : orderType === "market"
-                  ? `${side === "buy" ? "Buy" : "Sell"} (demo)`
+                  ? `${side === "buy" ? "Buy" : "Sell"}`
                   : `Place ${side === "buy" ? "buy" : "sell"} limit order`}
               </button>
             </>
