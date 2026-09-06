@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { STOCKS, ETFS, FOREX, CRYPTO, NON_CRYPTO_SYMBOLS, findAsset } from "../assetCatalog.js";
 import { useLivePrices } from "../hooks/useLivePrices.js";
@@ -27,7 +27,26 @@ export default function Dashboard() {
   const prevDisplayedValue = useRef(null);
   const deltaTimeout = useRef(null);
   const livePrices = useLivePrices();
-  const marketQuotes = useMarketQuotes(NON_CRYPTO_SYMBOLS);
+
+  // Twelve Data meters a batched quote request PER SYMBOL (confirmed via
+  // a real quota exhaustion incident — see CLAUDE.md), so polling all
+  // ~32 non-crypto catalog symbols unconditionally for as long as the
+  // Dashboard is mounted — regardless of which tab is actually open —
+  // burns the shared daily credit cap for data nobody's looking at. Only
+  // ask for what the current view actually needs: the full board while
+  // Markets is open (that page inherently shows everything), the symbols
+  // behind an open non-crypto position (Portfolio's valuation), whatever
+  // single asset is being viewed (the asset detail page), and any pending
+  // non-crypto limit order (the fill-while-open watcher below needs a
+  // live price for those regardless of which tab is showing).
+  const neededNonCryptoSymbols = useMemo(() => {
+    if (tab === "markets") return NON_CRYPTO_SYMBOLS;
+    const held = demoPositions.filter((p) => p.assetType !== "crypto").map((p) => p.symbol);
+    const viewed = tab === "asset" && selectedAsset && selectedAsset.type !== "crypto" ? [selectedAsset.symbol] : [];
+    const pending = pendingOrders.filter((o) => o.assetType !== "crypto").map((o) => o.symbol);
+    return [...new Set([...held, ...viewed, ...pending])];
+  }, [tab, demoPositions, selectedAsset, pendingOrders]);
+  const marketQuotes = useMarketQuotes(neededNonCryptoSymbols);
 
   // The embedded wallet Privy created automatically on login.
   const embeddedWallet = wallets.find((w) => w.walletClientType === "privy");
