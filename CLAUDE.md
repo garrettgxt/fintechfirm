@@ -290,6 +290,26 @@
   rather than waiting for the next successful fetch — not fabricated
   data, just not live-fresh. The other 7 non-crypto symbols populate
   themselves the next time Twelve Data succeeds.
+- The fallback cache above only ever had real price/changePct for these
+  symbols — never the fuller "Market details" field set (open/high/low/
+  previousClose/volume/avgVolume/52-week high-low/exchange), so that grid
+  stayed blank ("—") even once price/chart/Buy-Sell worked again. User's
+  call when asked about this: "since it's demo mode just add some random
+  data... just make it look simulated." AssetDetailPanel.jsx's
+  `simulateMarketFields(symbol, price, changePct)` fills exactly those
+  gaps — ONLY when demoMode is true and only for fields Twelve Data
+  didn't provide (never overwrites real data) — seeded by symbol (not
+  time) so numbers stay stable across renders instead of jittering.
+  previousClose is derived exactly from price+changePct (real math) when
+  available; Exchange is read from TV_SYMBOLS's real exchange prefix
+  (`exchangeFromTvSymbol`), also not simulated — only open/high/low/
+  volume/avgVolume/52-week are genuinely fabricated. The "Market details"
+  heading shows a small "(simulated for Demo Mode)" label whenever any
+  simulated value is in use, so it's never presented as if it were real —
+  this label is the line not to remove if asked to make the panel "look
+  more real": simulated financial figures need to stay identifiable as
+  such, not just look plausible. Never applies to a real (non-demo)
+  account.
 - Stock/ETF/forex CHARTS come from TradingView's free embeddable "Symbol
   Overview" widget (src/components/TradingViewWidget.jsx), rendered
   directly by both PriceChart.jsx and AssetDetailPanel.jsx for

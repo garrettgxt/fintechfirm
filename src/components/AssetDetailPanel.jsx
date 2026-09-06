@@ -43,6 +43,53 @@ function fmt(n, opts) {
   return n == null ? "—" : n.toLocaleString(undefined, opts);
 }
 
+function pick(real, simulated, formatter) {
+  if (real != null) return formatter(real);
+  if (simulated != null) return formatter(simulated);
+  return "—";
+}
+
+// Demo Mode's "Market details" grid needs fields Twelve Data's fallback
+// cache doesn't have (only price/changePct were ever genuinely observed
+// for the cached symbols — see CLAUDE.md's Twelve Data incident). The
+// user explicitly asked for this, framed as Demo Mode: fill the gaps
+// with plausible simulated figures instead of leaving the grid blank.
+// Seeded by symbol (not time) so a given symbol's simulated numbers stay
+// stable across renders/reloads rather than jittering — previousClose is
+// derived exactly from price+changePct (real math, not a guess) when
+// available; only open/high/low/volume/52-week are actually simulated.
+function seededRandom(seed) {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return () => {
+    h = (h * 1664525 + 1013904223) >>> 0;
+    return h / 4294967296;
+  };
+}
+
+function simulateMarketFields(symbol, price, changePct) {
+  const rand = seededRandom(symbol);
+  const previousClose = changePct != null ? price / (1 + changePct / 100) : price * (0.98 + rand() * 0.04);
+  const open = previousClose * (0.99 + rand() * 0.02);
+  const high = Math.max(price, open, previousClose) * (1 + rand() * 0.015);
+  const low = Math.min(price, open, previousClose) * (1 - rand() * 0.015);
+  const volume = Math.round((1_000_000 + rand() * 20_000_000) / 1000) * 1000;
+  const avgVolume = Math.round((volume * (0.8 + rand() * 0.4)) / 1000) * 1000;
+  const fiftyTwoWeekHigh = price * (1.08 + rand() * 0.25);
+  const fiftyTwoWeekLow = price * (0.55 + rand() * 0.3);
+  return { previousClose, open, high, low, volume, avgVolume, fiftyTwoWeekHigh, fiftyTwoWeekLow };
+}
+
+// TV_SYMBOLS already encodes the real exchange (e.g. "NASDAQ:AAPL") —
+// this is factual, not simulated, so it's used whenever Twelve Data
+// itself doesn't provide one.
+function exchangeFromTvSymbol(tvSymbol) {
+  if (!tvSymbol) return null;
+  const prefix = tvSymbol.split(":")[0];
+  if (prefix === "FX") return "Forex";
+  return prefix || null;
+}
+
 function StatRow({ label, value }) {
   return (
     <div className="detail-stat">
@@ -257,6 +304,16 @@ export default function AssetDetailPanel({
     }
   }
 
+  // If Twelve Data's real fields are missing (the fallback cache only
+  // ever had real price/changePct for these symbols — see CLAUDE.md),
+  // Demo Mode fills the gaps with simulated-but-plausible figures rather
+  // than leaving the grid blank, per the user's explicit request. Never
+  // shown for a real (non-demo) account.
+  const simulatedMarket =
+    !isCrypto && demoMode && price != null && (quote?.open == null || quote?.high == null || quote?.low == null)
+      ? simulateMarketFields(symbol, price, changePct)
+      : null;
+
   const stats = isCrypto
     ? [
         ["Open (24h)", cryptoStats ? formatPrice(parseFloat(cryptoStats.openPrice)) : "—"],
@@ -265,15 +322,15 @@ export default function AssetDetailPanel({
         ["Volume (24h)", cryptoStats ? fmt(parseFloat(cryptoStats.volume), { maximumFractionDigits: 0 }) : "—"],
       ]
     : [
-        ["Open", quote?.open != null ? formatPrice(quote.open) : "—"],
-        ["Previous close", quote?.previousClose != null ? formatPrice(quote.previousClose) : "—"],
-        ["High", quote?.high != null ? formatPrice(quote.high) : "—"],
-        ["Low", quote?.low != null ? formatPrice(quote.low) : "—"],
-        ["Volume", quote?.volume != null ? fmt(quote.volume, { maximumFractionDigits: 0 }) : "—"],
-        ["Average volume", quote?.avgVolume != null ? fmt(quote.avgVolume, { maximumFractionDigits: 0 }) : "—"],
-        ["52-week high", quote?.fiftyTwoWeekHigh != null ? formatPrice(quote.fiftyTwoWeekHigh) : "—"],
-        ["52-week low", quote?.fiftyTwoWeekLow != null ? formatPrice(quote.fiftyTwoWeekLow) : "—"],
-        ["Exchange", quote?.exchange || "—"],
+        ["Open", pick(quote?.open, simulatedMarket?.open, formatPrice)],
+        ["Previous close", pick(quote?.previousClose, simulatedMarket?.previousClose, formatPrice)],
+        ["High", pick(quote?.high, simulatedMarket?.high, formatPrice)],
+        ["Low", pick(quote?.low, simulatedMarket?.low, formatPrice)],
+        ["Volume", pick(quote?.volume, simulatedMarket?.volume, (n) => fmt(n, { maximumFractionDigits: 0 }))],
+        ["Average volume", pick(quote?.avgVolume, simulatedMarket?.avgVolume, (n) => fmt(n, { maximumFractionDigits: 0 }))],
+        ["52-week high", pick(quote?.fiftyTwoWeekHigh, simulatedMarket?.fiftyTwoWeekHigh, formatPrice)],
+        ["52-week low", pick(quote?.fiftyTwoWeekLow, simulatedMarket?.fiftyTwoWeekLow, formatPrice)],
+        ["Exchange", quote?.exchange || exchangeFromTvSymbol(TV_SYMBOLS[symbol]) || "—"],
       ];
 
   return (
@@ -330,7 +387,14 @@ export default function AssetDetailPanel({
           )}
 
           <div className="panel" style={{ marginTop: 24 }}>
-            <h3>Market details</h3>
+            <h3>
+              Market details
+              {simulatedMarket && (
+                <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 400, color: "rgba(237,231,218,0.4)" }}>
+                  (simulated for Demo Mode)
+                </span>
+              )}
+            </h3>
             <div className="detail-stats-grid">
               {stats.map(([label, value]) => (
                 <StatRow key={label} label={label} value={value} />
