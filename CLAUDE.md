@@ -116,11 +116,20 @@
   functions/add-demo-funds.js + src/components/AddDemoFundsModal.jsx
   (preset $500/$1000/$5000/$10000 chips + custom amount, no payment
   step — it's fake money). Deliberately a SEPARATE modal from
-  CreditInvoiceModal (real Site Credit payments) — routing a demo user
-  into the real payment flow would be actively misleading. Wired into
-  Dashboard.jsx's sidebar "+ Add funds" (mode-aware: opens this modal in
-  Demo Mode, the real one otherwise) and a second button next to "Invest
-  in stocks" on the Portfolio tab's balance card.
+  CreditInvoiceModal (real Site Credit/crypto-QR payments) — routing a
+  demo user into the real payment flow would be actively misleading.
+  IMPORTANT: this is ADDITIVE, not a replacement — a wallet can have
+  Demo Mode on AND still fund its real Site Credit balance via the actual
+  crypto-QR flow at the same time (they're independent systems; a first
+  attempt at this made the sidebar's "+ Add funds" mode-aware and
+  accidentally made the real flow unreachable while demoMode was on —
+  reverted after the user asked "can I still add funds with the QR code
+  in demo mode?"). Current wiring: Dashboard.jsx's sidebar "+ Add funds"
+  ALWAYS opens the real CreditInvoiceModal regardless of demo_mode; a
+  separate "+ Add demo funds" button next to "Invest in stocks" on the
+  Portfolio tab's balance card (shown only when demoMode is true) opens
+  AddDemoFundsModal. Two distinct, clearly-labeled entry points, not one
+  button that branches.
 - AssetDetailPanel.jsx's Buy/Sell panel no longer displays "Demo cash:
   $X" — user feedback was that this is redundant once the account is
   already known to be in Demo Mode (shown elsewhere via the "Demo" badge
