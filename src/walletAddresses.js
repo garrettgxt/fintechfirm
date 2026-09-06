@@ -1,16 +1,23 @@
-// Coinstate Capital — fixed dev/test destination wallets
+// Coinstate Capital — fixed Site Credit deposit wallets
 //
-// DEV/TEST ONLY. These are NOT per-user Privy embedded wallets — every
-// purchase made on the site currently lands in ONE of these four fixed
-// addresses, shared across all buyers, for manual testing of the
-// Banxa buy flow for each currency.
+// These are NOT per-user Privy embedded wallets — every Site Credit
+// deposit lands in ONE of these four fixed addresses, shared across all
+// buyers. Originally set up for manual testing of the (now unused) Banxa
+// buy flow; as of 2026-09-06 this is also the LIVE address set for
+// CreditInvoiceModal.jsx's real-money deposit flow (NOWPayments was
+// removed entirely — explicit user decision, see CLAUDE.md's Site Credit
+// section for the full tradeoff). Because it's one shared address per
+// currency with no memo/payment-ID field on any of these chains, nothing
+// can automatically confirm a payment or know which customer sent it —
+// functions/submit-deposit-request.js + functions/admin-review-deposit.js
+// exist specifically to cover that gap with a human verification step
+// instead of an automated one.
 //
-// This is fine for you + a friend testing the flow. It is NOT compatible
-// with the site's current copy ("Coinstate Capital never has access to
-// your funds", "a wallet only you control") if real outside users and
-// real money are ever involved — see Auth.jsx / Landing.jsx. Revisit
-// before that happens: either update that copy to reflect custodial
-// reality, or switch to per-user Privy wallets for each chain.
+// This still does NOT match the site's copy ("Coinstate Capital never
+// has access to your funds", "a wallet only you control") — see
+// Auth.jsx / Landing.jsx. That inconsistency was already flagged before
+// Site Credit shipped at all and remains a known, deliberately-deferred
+// issue, not an oversight.
 
 export const WALLET_ADDRESSES = {
   eth: "0xfBe9Dc46f9985B1dA483D3e4FA7F65F5fa82946F",

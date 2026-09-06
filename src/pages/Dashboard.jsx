@@ -95,7 +95,8 @@ export default function Dashboard() {
 
   useEffect(refreshDemoPortfolio, [walletAddress]);
 
-  // Site-credit balance (custodial — see functions/nowpayments-webhook.js).
+  // Site-credit balance (custodial — see functions/admin-review-deposit.js,
+  // the only place it's ever incremented now that NOWPayments is gone).
   // Separate from Demo Mode on purpose: one is real money Coinstate
   // Capital is holding, the other is a simulated paper-trading balance.
   function refreshCreditBalance() {
@@ -462,7 +463,6 @@ export default function Dashboard() {
           walletAddress={walletAddress}
           initialCurrency={creditCurrency}
           onClose={() => setCreditOpen(false)}
-          onCredited={refreshCreditBalance}
         />
       )}
 

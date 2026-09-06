@@ -1,5 +1,6 @@
 // Cloudflare Pages Function: returns a wallet's current site-credit
-// balance (see nowpayments-webhook.js for how it gets incremented).
+// balance (see admin-review-deposit.js for how it gets incremented —
+// manual admin approval, now that NOWPayments is gone).
 // This is a custodial balance held by Coinstate Capital, separate from
 // the user's real on-chain wallet holdings.
 

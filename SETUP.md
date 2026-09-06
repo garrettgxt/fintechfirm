@@ -32,31 +32,42 @@ approved before you get credentials:
 Your Privy App ID is already filled in (`src/privyConfig.js`) — nothing to
 change there.
 
-## 2b. Get NOWPayments access (for the "Add credit" flow)
+## 2b. Site Credit deposits (the "Add funds" flow)
 
 Separate from Banxa, there's a second, custodial way to add funds: a user
-pays with crypto they already have, and Coinstate Capital's own
-NOWPayments account receives it and credits their site balance. This is
-self-serve, no business verification required for crypto-only flows:
+pays crypto to one of Coinstate Capital's own FIXED addresses
+(`src/walletAddresses.js` — one per currency, same address for every
+customer paying in that currency), then submits what they sent (amount +
+optional transaction hash). Nothing auto-credits — there's no NOWPayments
+or any other provider in this flow anymore (removed 2026-09-06; see
+CLAUDE.md's Site Credit section for the full reasoning), because a fixed
+shared address has no way to automatically confirm a payment or know
+which customer sent it. Instead:
 
-1. Sign up at [nowpayments.io](https://nowpayments.io).
-2. From your dashboard, get an **API key**, and generate an **IPN secret
-   key** (Payment Settings section).
-3. Set both as Cloudflare Pages secrets — see step 5 below.
+1. Go to `/admin` (password-gated by `ADMIN_PASSWORD`, below) and check
+   the "Pending deposit requests" section.
+2. For each request, open the block-explorer link (built from the
+   submitted tx hash) and verify the payment actually happened for the
+   claimed amount.
+3. Click **Approve** to credit that customer's Site Credit balance, or
+   **Reject** if it doesn't check out.
 
-**Important:** this makes Coinstate Capital an actual custodian of that
-money, which conflicts with the site's own footer/Auth page copy claiming
-it never holds customer funds. That's a known, deliberately-deferred
-inconsistency (see CLAUDE.md) — resolve it (update the copy, or get real
-legal advice on the money-transmission implications) before real users hit
-this feature with real money.
+No third-party payment provider account or API key is needed for this
+flow — it's entirely addresses already in this repo plus manual review.
+
+**Important:** this still makes Coinstate Capital an actual custodian of
+that money, which conflicts with the site's own footer/Auth page copy
+claiming it never holds customer funds. That's a known,
+deliberately-deferred inconsistency (see CLAUDE.md) — resolve it (update
+the copy, or get real legal advice on the money-transmission
+implications) before real users hit this feature with real money.
 
 ## 3. Run it locally to check it works
 
     npm run dev
 
 Open the URL it gives you (usually http://localhost:5173). Note: wallet
-registration, Demo Mode lookups, Banxa's checkout, and Add credit will
+registration, Demo Mode lookups, Banxa's checkout, and Add funds will
 show errors locally, because those depend on the `functions/` folder,
 which only runs once deployed to Cloudflare Pages — that's expected, not a
 bug. Live prices and charts work locally too, since they call public
@@ -69,8 +80,6 @@ in the project root to supply env vars locally, e.g.:
 
     SUPABASE_URL=...
     SUPABASE_SERVICE_ROLE_KEY=...
-    NOWPAYMENTS_API_KEY=...
-    NOWPAYMENTS_IPN_SECRET=...
     ADMIN_PASSWORD=...
 
 ## 4. Deploy to Cloudflare Pages
@@ -93,11 +102,9 @@ Production and Preview):
 
 | Variable | Used by | Notes |
 |---|---|---|
-| `SUPABASE_URL` | `functions/get-override.js`, `register-wallet.js`, `admin-list.js`, `admin-update.js`, `create-payment.js`, `nowpayments-webhook.js`, `get-credit-balance.js`, `payment-status.js` | e.g. `https://your-project.supabase.co` |
+| `SUPABASE_URL` | `functions/get-override.js`, `register-wallet.js`, `admin-list.js`, `admin-update.js`, `admin-list-deposit-requests.js`, `admin-review-deposit.js`, `submit-deposit-request.js`, `get-credit-balance.js` | e.g. `https://your-project.supabase.co` |
 | `SUPABASE_SERVICE_ROLE_KEY` | same as above | From Supabase Project Settings → API → `service_role` key. This bypasses row-level security — server-side only, never in `src/` or the browser. |
-| `ADMIN_PASSWORD` | `functions/admin-list.js`, `admin-update.js` | Password gating the `/admin` panel (sent as the `x-admin-password` header). |
-| `NOWPAYMENTS_API_KEY` | `functions/create-payment.js` | From your NOWPayments dashboard (see step 2b). |
-| `NOWPAYMENTS_IPN_SECRET` | `functions/nowpayments-webhook.js` | Generated in NOWPayments' Payment Settings — NOT the same as the API key. Used to verify that webhook calls actually came from NOWPayments before crediting any balance. |
+| `ADMIN_PASSWORD` | `functions/admin-list.js`, `admin-update.js`, `admin-list-deposit-requests.js`, `admin-review-deposit.js` | Password gating the `/admin` panel (sent as the `x-admin-password` header). |
 
 Banxa's referral integration needs no server-side secret — `BANXA_PARTNER_REF`
 lives in `src/banxaConfig.js` since it's just a subdomain, not a private key.
@@ -120,11 +127,12 @@ client, no Supabase code in `src/`).
 `demo_mode` (bool), `demo_balance_usd` (numeric), `demo_asset` (text),
 `demo_asset_amount` (numeric), `updated_at` (timestamptz).
 
-The Add-credit flow adds two more tables (see
-`supabase/migrations/20260905214448_add_credit_system.sql`):
-`credit_payments` (one row per NOWPayments payment — the audit trail and
-idempotency guard) and `user_credits` (`wallet_address`, `balance_usd`) —
-the actual custodial balance shown on the dashboard.
+The Site Credit flow adds `user_credits` (`wallet_address`, `balance_usd`
+— the actual custodial balance shown on the dashboard, see
+`supabase/migrations/20260905214448_add_credit_system.sql`) and
+`credit_deposit_requests` (`wallet_address`, `amount_usd`, `currency`,
+`tx_hash`, `status`, see `supabase/migrations/20260906070000_add_credit_deposit_requests.sql`)
+— one row per customer's "I sent this" submission, reviewed via /admin.
 
 This repo is already linked to the Supabase project (`supabase link`).
 Schema changes should go through migrations (`supabase migration new
@@ -147,20 +155,20 @@ allowed domains.
 5. Complete a test purchase using Banxa's sandbox test flow (see their
    sandbox docs) — nothing costs real money while `BANXA_SANDBOX = true`
 6. Visit `/admin`, enter the `ADMIN_PASSWORD`, and confirm you can see and
-   toggle Demo Mode for a registered wallet
-7. Click "Add credit" in the dashboard sidebar, pick an amount and
-   currency, and confirm an invoice (QR code, exact amount, address,
-   countdown) appears. Paying it should flip the modal to "Payment
-   received" and increase "Site credit" — this requires
-   `NOWPAYMENTS_API_KEY` / `NOWPAYMENTS_IPN_SECRET` to be set first.
+   toggle Demo Mode for a registered wallet, and see the "Pending deposit
+   requests" section at the top
+7. Click "Add funds" in the dashboard sidebar, pick an amount and
+   currency, confirm the fixed address + QR appears, and submit a test
+   request (amount + optional tx hash). It should show up under "Pending
+   deposit requests" in `/admin` — clicking Approve there should increase
+   that wallet's Site Credit balance.
 
 ## What's real vs. what's next
 
 **Real now:** login, wallet creation, live streaming prices and charts,
 Banxa sandbox purchases (once `BANXA_PARTNER_REF` is filled in) landing on
-a real wallet address, admin Demo Mode overrides via Supabase, and Add
-Credit (once the NOWPayments env vars are set) crediting a custodial site
-balance.
+a real wallet address, admin Demo Mode overrides via Supabase, and Site
+Credit deposit requests reviewed and approved via `/admin`.
 
 **Not built yet:**
 - Reading the wallet's actual on-chain balance to show in the holdings
@@ -169,5 +177,5 @@ balance.
 - Stock investing (Alpaca integration)
 - Production Banxa access (requires their approval — separate from
   anything here)
-- Reconciling Add Credit's custodial model with the site's self-custodial
+- Reconciling Site Credit's custodial model with the site's self-custodial
   copy — see the note in step 2b and CLAUDE.md

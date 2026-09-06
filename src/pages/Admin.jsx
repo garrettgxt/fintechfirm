@@ -1,9 +1,30 @@
 import { useState } from "react";
 
+// Block explorer links per currency, for verifying a submitted tx_hash
+// before approving a deposit request — see CLAUDE.md's Site Credit
+// section for why this manual step exists (NOWPayments was removed;
+// fixed shared addresses have no automated way to confirm a payment).
+function explorerUrl(currency, txHash) {
+  if (!txHash) return null;
+  switch (currency) {
+    case "eth":
+      return `https://etherscan.io/tx/${txHash}`;
+    case "btc":
+      return `https://www.blockchain.com/explorer/transactions/btc/${txHash}`;
+    case "ltc":
+      return `https://blockchair.com/litecoin/transaction/${txHash}`;
+    case "sol":
+      return `https://solscan.io/tx/${txHash}`;
+    default:
+      return null;
+  }
+}
+
 export default function Admin() {
   const [password, setPassword] = useState("");
   const [authed, setAuthed] = useState(false);
   const [wallets, setWallets] = useState([]);
+  const [depositRequests, setDepositRequests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -22,11 +43,33 @@ export default function Admin() {
       }
       setWallets(data.wallets);
       setAuthed(true);
+      loadDepositRequests(pwd);
     } catch (e) {
       setError("Network error");
     } finally {
       setLoading(false);
     }
+  }
+
+  async function loadDepositRequests(pwd) {
+    try {
+      const res = await fetch("/admin-list-deposit-requests", {
+        headers: { "x-admin-password": pwd },
+      });
+      const data = await res.json();
+      if (res.ok) setDepositRequests(data.requests);
+    } catch (e) {
+      console.error("Failed to load deposit requests:", e);
+    }
+  }
+
+  async function reviewDeposit(requestId, action) {
+    await fetch("/admin-review-deposit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      body: JSON.stringify({ requestId, action }),
+    });
+    loadDepositRequests(password);
   }
 
   async function updateWallet(walletAddress, demoMode, demoBalanceUsd) {
@@ -74,6 +117,61 @@ export default function Admin() {
 
   return (
     <div style={{ padding: 40, maxWidth: 900, margin: "0 auto" }}>
+      <h1 className="serif" style={{ fontSize: 26, marginBottom: 12 }}>Admin — Pending deposit requests</h1>
+      <div style={{ fontSize: 13, color: "rgba(237,231,218,0.5)", marginBottom: 24 }}>
+        Site Credit deposits go to the fixed addresses in src/walletAddresses.js — there's no
+        automatic way to confirm a payment or know who sent it, so nothing is credited until you
+        verify the tx hash on a block explorer and approve it here.
+      </div>
+
+      {depositRequests.length === 0 ? (
+        <div style={{ fontSize: 13.5, color: "rgba(237,231,218,0.45)", marginBottom: 32 }}>
+          No pending deposit requests.
+        </div>
+      ) : (
+        <div style={{ marginBottom: 32 }}>
+          {depositRequests.map((r) => (
+            <div key={r.id} style={{ background: "var(--ink-2)", border: "1px solid var(--line)", borderRadius: 6, padding: 20, marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+                <div>
+                  <div className="num" style={{ fontSize: 15, fontWeight: 600 }}>
+                    ${Number(r.amount_usd).toFixed(2)} — {r.currency.toUpperCase()}
+                  </div>
+                  <div className="num" style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)", marginTop: 4 }}>
+                    {r.wallet_address}
+                  </div>
+                  <div style={{ fontSize: 12, color: "rgba(237,231,218,0.4)", marginTop: 4 }}>
+                    {new Date(r.created_at).toLocaleString()}
+                  </div>
+                  {r.tx_hash ? (
+                    <a
+                      href={explorerUrl(r.currency, r.tx_hash)}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ fontSize: 12.5, color: "var(--brass-bright)", marginTop: 8, display: "inline-block" }}
+                    >
+                      View tx on block explorer →
+                    </a>
+                  ) : (
+                    <div style={{ fontSize: 12.5, color: "var(--rust)", marginTop: 8 }}>
+                      No tx hash submitted — verify manually before approving.
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="btn-primary" onClick={() => reviewDeposit(r.id, "approve")}>
+                    Approve
+                  </button>
+                  <button className="btn-secondary" onClick={() => reviewDeposit(r.id, "reject")}>
+                    Reject
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <h1 className="serif" style={{ fontSize: 26, marginBottom: 24 }}>Admin — Wallet Overrides</h1>
       <div style={{ fontSize: 13, color: "rgba(237,231,218,0.5)", marginBottom: 24 }}>
         Toggling Demo Mode gives the account a demo cash balance they can use
