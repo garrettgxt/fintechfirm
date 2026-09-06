@@ -54,7 +54,7 @@ export default function Dashboard() {
   const embeddedWallet = wallets.find((w) => w.walletClientType === "privy");
   const walletAddress = embeddedWallet ? embeddedWallet.address : null;
 
-  const email = user?.email?.address || user?.google?.email || user?.apple?.email || "";
+  const email = user?.email?.address || user?.google?.email || "";
 
   // If a logged-out visitor clicked a stock/coin on Landing.jsx (search or
   // a chart's Buy button), that sent them to /auth with no session to open

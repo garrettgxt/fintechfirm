@@ -10,7 +10,12 @@
 export const PRIVY_APP_ID = "cmtniisf700490dk0brltloy2";
 
 export const privyConfig = {
-  loginMethods: ["email", "google", "apple"],
+  // "apple" removed 2026-09-06 — Sign in with Apple needs an active Apple
+  // Developer Program membership ($99/yr) plus a Services ID/Team ID/Key
+  // ID/private key registered in the Privy dashboard, none of which exist
+  // here. Re-add "apple" to this array once that's set up — no other code
+  // change needed, Privy handles the rest.
+  loginMethods: ["email", "google"],
   appearance: {
     theme: "dark",
     accentColor: "#B08A4E",

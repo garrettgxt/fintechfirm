@@ -41,8 +41,8 @@ export default function Auth() {
           </button>
 
           <div className="auth-fine">
-            Continuing lets you sign in with email, Google, or Apple, and
-            creates your self-custodial Coinstate Capital wallet if you don't
+            Continuing lets you sign in with email or Google, and creates
+            your self-custodial Coinstate Capital wallet if you don't
             already have one.
           </div>
         </div>

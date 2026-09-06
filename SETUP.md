@@ -1,6 +1,6 @@
 # Coinstate Capital — React app setup
 
-Privy handles login (email, Google, Apple) AND creates each user's
+Privy handles login (email, Google) AND creates each user's
 self-custodial wallet automatically. Banxa is wired up to buy crypto
 straight into that wallet. Supabase backs the admin Demo Mode feature
 (overriding a wallet's displayed balance). Live prices and charts stream
@@ -145,7 +145,7 @@ allowed domains.
 ## 7. Test the real flow
 
 1. Visit your Cloudflare Pages URL, click "Create your wallet"
-2. Log in with email, Google, or Apple through Privy's popup
+2. Log in with email or Google through Privy's popup
 3. You'll land on `/dashboard` — a wallet address should appear within a
    few seconds (Privy creating it automatically), and the wallet gets
    registered into `wallet_overrides` via `register-wallet.js`

@@ -19,7 +19,7 @@ const STEPS = [
   {
     n: "01",
     title: "Create your wallet",
-    body: "Log in with email, Google, or Apple. A self-custodial wallet is generated for you automatically — no seed phrase to write down, no separate app to install.",
+    body: "Log in with email or Google. A self-custodial wallet is generated for you automatically — no seed phrase to write down, no separate app to install.",
   },
   {
     n: "02",
