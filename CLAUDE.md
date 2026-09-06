@@ -245,6 +245,22 @@
   and its Twelve Data time_series calls are now UNUSED (left in place,
   not deleted, per the comment in that file) — see the incident below for
   why this changed.
+- Widget config went through several iterations before landing on a
+  clean result (all same-day, 2026-09-06): the default "Symbol Overview"
+  widget repeats the full company name + price inside the chart itself,
+  duplicating our own header; switching to the "Mini Chart" product
+  still showed its own compact ticker+name label, same problem. Final
+  config: "Symbol Overview" with `chartOnly: true` (strips the name/price
+  row) PLUS `hideDateRanges: true` (chartOnly alone still left the
+  widget's own 1D/1M/3M/1Y/5Y/All tab row showing, duplicating ours).
+  Since chartOnly has no date-range UI to drive externally, the active
+  range is set by appending `|<rangeCode>` directly to the symbol string
+  (TradingView's own range ids: 1d, 1m, 3m, 12m, 60m, all) — see
+  `rangeCode` prop on TradingViewWidget.jsx and MARKET_RANGES in
+  PriceChart.jsx / AssetDetailPanel.jsx for the buttons that drive it.
+  The remaining small circular TradingView badge on the chart is
+  rendered inside a cross-origin iframe — no CSS/JS access from our side,
+  not a config flag being left off, a fixed condition of the free embed.
 - IMPORTANT INCIDENT (2026-09-06, several rounds in one day):
   1. The free tier's 800 credits/day cap was found completely exhausted
      (1995 used, confirmed via Twelve Data's own /api_usage endpoint
