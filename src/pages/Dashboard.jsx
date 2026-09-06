@@ -6,6 +6,7 @@ import { useMarketQuotes } from "../hooks/useMarketQuotes.js";
 import PriceChart from "../components/PriceChart.jsx";
 import Sparkline from "../components/Sparkline.jsx";
 import CreditInvoiceModal from "../components/CreditInvoiceModal.jsx";
+import AddDemoFundsModal from "../components/AddDemoFundsModal.jsx";
 import AssetSearch from "../components/AssetSearch.jsx";
 import AssetDetailPanel from "../components/AssetDetailPanel.jsx";
 import { consumePendingAsset } from "../pendingAsset.js";
@@ -20,6 +21,7 @@ export default function Dashboard() {
   const [tab, setTab] = useState("portfolio");
   const [balanceDelta, setBalanceDelta] = useState(null); // { amount, direction } — a brief "+$0.03" flash
   const [creditOpen, setCreditOpen] = useState(false);
+  const [demoFundsOpen, setDemoFundsOpen] = useState(false);
   const [creditCurrency, setCreditCurrency] = useState("eth"); // which coin is preselected when the modal opens
   const [creditBalance, setCreditBalance] = useState(0); // custodial site-credit balance, NOT on-chain funds
   const [selectedAsset, setSelectedAsset] = useState(null); // asset object when tab === "asset"
@@ -205,6 +207,16 @@ export default function Dashboard() {
     setCreditOpen(true);
   }
 
+  // The sidebar/balance-card "Add funds" entry point is mode-aware: a
+  // demo account tops up its simulated cash balance (no payment
+  // involved), a real account goes through the actual Site Credit
+  // payment flow. Routing a demo user into the real payment modal would
+  // be actively misleading — they're two independent systems.
+  function handleAddFundsClick() {
+    if (demoMode) setDemoFundsOpen(true);
+    else openAddFunds();
+  }
+
   // Opens the full asset detail view (chart, market details, buy/sell panel).
   function openAsset(asset) {
     setSelectedAsset(asset);
@@ -262,7 +274,7 @@ export default function Dashboard() {
             <button className={tab === "markets" ? "active" : ""} onClick={() => setTab("markets")}>
               ↗ Markets
             </button>
-            <button onClick={() => openAddFunds()}>＋ Add funds</button>
+            <button onClick={handleAddFundsClick}>＋ Add funds</button>
             <button disabled title="Coming soon">⚙ Settings</button>
           </nav>
         </div>
@@ -338,7 +350,10 @@ export default function Dashboard() {
               </div>
               <div className="balance-actions">
                 {demoMode ? (
-                  <button className="btn-primary" onClick={() => setTab("markets")}>Invest in stocks</button>
+                  <>
+                    <button className="btn-primary" onClick={() => setTab("markets")}>Invest in stocks</button>
+                    <button className="btn-secondary" onClick={() => setDemoFundsOpen(true)}>+ Add funds</button>
+                  </>
                 ) : (
                   <button className="btn-secondary" onClick={() => openAddFunds()}>Add funds</button>
                 )}
@@ -458,6 +473,14 @@ export default function Dashboard() {
           initialCurrency={creditCurrency}
           onClose={() => setCreditOpen(false)}
           onCredited={refreshCreditBalance}
+        />
+      )}
+
+      {demoFundsOpen && (
+        <AddDemoFundsModal
+          walletAddress={walletAddress}
+          onClose={() => setDemoFundsOpen(false)}
+          onAdded={refreshDemoPortfolio}
         />
       )}
     </div>

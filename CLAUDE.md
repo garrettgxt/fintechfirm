@@ -109,6 +109,26 @@
 - Dashboard.jsx shows a demo cash panel + a multi-position holdings table
   (with P&L per position) only when demo_mode is true; a real account
   shows neither, just the Site Credit balance.
+- Self-service "Add demo funds" (2026-09-06): previously only the /admin
+  panel could top up demo_balance_usd — a demo user had no way to add
+  more simulated cash themselves. New Postgres function `add_demo_funds`
+  (same shape as apply_demo_trade: hard-requires demo_mode=true) +
+  functions/add-demo-funds.js + src/components/AddDemoFundsModal.jsx
+  (preset $500/$1000/$5000/$10000 chips + custom amount, no payment
+  step — it's fake money). Deliberately a SEPARATE modal from
+  CreditInvoiceModal (real Site Credit payments) — routing a demo user
+  into the real payment flow would be actively misleading. Wired into
+  Dashboard.jsx's sidebar "+ Add funds" (mode-aware: opens this modal in
+  Demo Mode, the real one otherwise) and a second button next to "Invest
+  in stocks" on the Portfolio tab's balance card.
+- AssetDetailPanel.jsx's Buy/Sell panel no longer displays "Demo cash:
+  $X" — user feedback was that this is redundant once the account is
+  already known to be in Demo Mode (shown elsewhere via the "Demo" badge
+  next to Total portfolio value). `cashUsd` is still passed as a prop and
+  used internally for the overBudget check, just not shown as text
+  anymore. The "You hold N SYMBOL" sell-context line is kept (shown only
+  when side === "sell") since that's information the user actually needs,
+  not restated state.
 
 ## Search, Asset Detail Page, and Limit Orders (Demo Mode)
 - src/components/AssetSearch.jsx: client-side search over the static
@@ -231,6 +251,23 @@
   functions/market-quote.js (batched — see below for why this is cheap).
   Needs `TWELVE_DATA_API_KEY` (Cloudflare secret, set from the user's own
   free-tier Twelve Data account).
+- FALLBACK for when the daily cap is exhausted (2026-09-06): the incident
+  below kept recurring even after every free-tier optimization, and while
+  exhausted, Demo Mode market buys were completely blocked ("Waiting for
+  a live price..."), which doesn't need to happen — Demo Mode doesn't
+  need a fresh price, just *a* real one. New Supabase table
+  `market_quote_cache` (symbol primary key, jsonb data) — every
+  successful market-quote.js response now persists each quote there
+  (fire-and-forget); when Twelve Data itself fails, market-quote.js falls
+  back to the last cached value per symbol instead of erroring out. A
+  symbol that's never been successfully fetched still comes back with
+  price: null — this can't invent a price, only remember a real one.
+  Seeded once (supabase/migrations/20260906050100_add_market_quote_cache.sql)
+  with AAPL/TSLA/NVDA/NFLX prices actually observed via Twelve Data
+  earlier that same session, so Demo buys for those worked immediately
+  rather than waiting for the next successful fetch — not fabricated
+  data, just not live-fresh. The other 7 non-crypto symbols populate
+  themselves the next time Twelve Data succeeds.
 - Stock/ETF/forex CHARTS come from TradingView's free embeddable "Symbol
   Overview" widget (src/components/TradingViewWidget.jsx), rendered
   directly by both PriceChart.jsx and AssetDetailPanel.jsx for

@@ -360,10 +360,11 @@ export default function AssetDetailPanel({
                 </button>
               </div>
 
-              <div style={{ fontSize: 12, color: "rgba(237,231,218,0.5)", marginBottom: 16 }}>
-                Demo cash: ${cashUsd.toFixed(2)}
-                {side === "sell" && ` · You hold ${holdingQuantity} ${symbol}`}
-              </div>
+              {side === "sell" && (
+                <div style={{ fontSize: 12, color: "rgba(237,231,218,0.5)", marginBottom: 16 }}>
+                  You hold {holdingQuantity} {symbol}
+                </div>
+              )}
 
               <div style={{ fontSize: 12, color: "rgba(237,231,218,0.5)", marginBottom: 8 }}>Order type</div>
               <select
