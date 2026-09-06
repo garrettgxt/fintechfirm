@@ -226,11 +226,13 @@ export default function Dashboard() {
                   )}
                 </div>
               </div>
-              {!demoMode && (
-                <div className="balance-actions">
+              <div className="balance-actions">
+                {demoMode ? (
+                  <button className="btn-primary" onClick={() => setTab("markets")}>Invest in stocks</button>
+                ) : (
                   <button className="btn-secondary" onClick={() => openAddFunds()}>Add funds</button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             {demoMode && (
