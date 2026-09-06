@@ -354,7 +354,6 @@ export default function Dashboard() {
             {demoMode && (
               <>
                 <div className="panel">
-                  <h3>Demo cash available</h3>
                   <span className="status-pill healthy">Ready to trade</span>
                   <div className="wallet-address num">${demoCashUsd.toFixed(2)}</div>
                 </div>
