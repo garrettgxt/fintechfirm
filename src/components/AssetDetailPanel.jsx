@@ -273,15 +273,17 @@ export default function AssetDetailPanel({
           <div className="asset-detail-title serif">
             {name} <span className="chart-card-symbol">{symbol}</span>
           </div>
-          <div className="chart-card-price num" style={{ fontSize: 30, marginTop: 8 }}>
-            {price != null ? formatPrice(price) : "Loading…"}
-            {changePct != null && (
-              <span className="chart-card-change" style={{ color: changeColor, fontSize: 15 }}>
-                {changePct >= 0 ? "+" : ""}
-                {changePct.toFixed(2)}%
-              </span>
-            )}
-          </div>
+          {isCrypto && (
+            <div className="chart-card-price num" style={{ fontSize: 30, marginTop: 8 }}>
+              {price != null ? formatPrice(price) : "Loading…"}
+              {changePct != null && (
+                <span className="chart-card-change" style={{ color: changeColor, fontSize: 15 }}>
+                  {changePct >= 0 ? "+" : ""}
+                  {changePct.toFixed(2)}%
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

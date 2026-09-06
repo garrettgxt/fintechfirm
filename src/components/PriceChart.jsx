@@ -122,15 +122,17 @@ export default function PriceChart({ symbol, name, type = "crypto", quote, onBuy
           <div className="chart-card-title">
             {displayName} <span className="chart-card-symbol">{symbol}</span>
           </div>
-          <div className="chart-card-price num">
-            {live?.price != null ? formatPrice(live.price) : "Loading…"}
-            {changePct != null && (
-              <span className="chart-card-change" style={{ color: changeColor }}>
-                {changePct >= 0 ? "+" : ""}
-                {changePct.toFixed(2)}%
-              </span>
-            )}
-          </div>
+          {isCrypto && (
+            <div className="chart-card-price num">
+              {live?.price != null ? formatPrice(live.price) : "Loading…"}
+              {changePct != null && (
+                <span className="chart-card-change" style={{ color: changeColor }}>
+                  {changePct >= 0 ? "+" : ""}
+                  {changePct.toFixed(2)}%
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
           {onSell && holdingQuantity > 0 && (
