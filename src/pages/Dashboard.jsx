@@ -322,14 +322,7 @@ export default function Dashboard() {
           <div className="content">
             <div className="balance-card">
               <div>
-                <div className="balance-label">
-                  Total portfolio value
-                  {demoMode && (
-                    <span style={{ marginLeft: 10, fontSize: 11, color: "var(--brass-bright)" }}>
-                      Demo
-                    </span>
-                  )}
-                </div>
+                <div className="balance-label">Total portfolio value</div>
                 <div className="balance-amount num" style={{ display: "flex", alignItems: "baseline" }}>
                   {`$${displayedUsdValue.toFixed(2)}`}
                   {balanceDelta && (
@@ -343,7 +336,7 @@ export default function Dashboard() {
                 {demoMode ? (
                   <>
                     <button className="btn-primary" onClick={() => setTab("markets")}>Invest in stocks</button>
-                    <button className="btn-secondary" onClick={() => setDemoFundsOpen(true)}>+ Add demo funds</button>
+                    <button className="btn-secondary" onClick={() => setDemoFundsOpen(true)}>+ Add funds</button>
                   </>
                 ) : (
                   <button className="btn-secondary" onClick={() => openAddFunds()}>Add funds</button>
