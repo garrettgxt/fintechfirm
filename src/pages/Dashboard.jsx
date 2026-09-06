@@ -19,7 +19,14 @@ export default function Dashboard() {
   const [demoMode, setDemoMode] = useState(false);
   const [demoCashUsd, setDemoCashUsd] = useState(0);
   const [demoPositions, setDemoPositions] = useState([]); // [{symbol, assetType, quantity, avgCost}]
-  const [pendingWithdrawal, setPendingWithdrawal] = useState(null); // {id, amountUsd, createdAt} | null
+  const [withdrawal, setWithdrawal] = useState(null); // {id, amountUsd, status, createdAt, reviewedAt} | null — most recent request, any status
+  const [dismissedWithdrawalId, setDismissedWithdrawalId] = useState(() => {
+    try {
+      return localStorage.getItem("dismissedWithdrawalId");
+    } catch {
+      return null;
+    }
+  });
   const [tab, setTab] = useState("portfolio");
   const [balanceDelta, setBalanceDelta] = useState(null); // { amount, direction } — a brief "+$0.03" flash
   const [creditOpen, setCreditOpen] = useState(false);
@@ -96,7 +103,7 @@ export default function Dashboard() {
         // side (apply_demo_trade) already deletes these on sell, but a
         // holding this small is never meaningful to show regardless.
         setDemoPositions((data.positions ?? []).filter((p) => p.quantity > 1e-8));
-        setPendingWithdrawal(data.pendingWithdrawal ?? null);
+        setWithdrawal(data.withdrawal ?? null);
       })
       .catch((err) => console.error("Failed to fetch demo portfolio:", err));
   }
@@ -162,6 +169,21 @@ export default function Dashboard() {
     checkOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoMode, pendingOrders, livePrices, marketQuotes]);
+
+  // Once a withdrawal request is reviewed, its outcome banner (below)
+  // stays visible until the user dismisses it — otherwise an approved/
+  // rejected request would just silently vanish from get-demo-portfolio's
+  // "most recent request" the next time a new one is submitted. Only the
+  // dismissed request's own id is remembered (localStorage, so it
+  // survives a reload), so a brand new request always shows its own
+  // pending/approved/rejected banner regardless of past dismissals.
+  function dismissWithdrawalBanner() {
+    if (!withdrawal) return;
+    try {
+      localStorage.setItem("dismissedWithdrawalId", String(withdrawal.id));
+    } catch {}
+    setDismissedWithdrawalId(String(withdrawal.id));
+  }
 
   function cancelOrder(orderId) {
     fetch("/cancel-demo-order", {
@@ -343,8 +365,8 @@ export default function Dashboard() {
                     <button
                       className="btn-secondary"
                       onClick={() => setWithdrawOpen(true)}
-                      disabled={!!pendingWithdrawal}
-                      title={pendingWithdrawal ? "You already have a withdrawal pending review" : undefined}
+                      disabled={withdrawal?.status === "pending"}
+                      title={withdrawal?.status === "pending" ? "You already have a withdrawal pending review" : undefined}
                     >
                       Withdraw
                     </button>
@@ -355,17 +377,48 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {demoMode && pendingWithdrawal && (
-              <div className="withdraw-pending-banner">
+            {demoMode && withdrawal && String(withdrawal.id) !== dismissedWithdrawalId && (
+              <div
+                className="withdraw-status-banner"
+                style={{
+                  borderColor:
+                    withdrawal.status === "approved" ? "var(--sage)" : withdrawal.status === "rejected" ? "var(--rust)" : "var(--brass)",
+                  background:
+                    withdrawal.status === "approved"
+                      ? "rgba(92,143,114,0.08)"
+                      : withdrawal.status === "rejected"
+                      ? "rgba(162,90,69,0.08)"
+                      : "rgba(176,138,78,0.08)",
+                }}
+              >
                 <div>
-                  <div style={{ fontWeight: 600, marginBottom: 4 }}>Withdrawal pending</div>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                    {withdrawal.status === "approved"
+                      ? "Withdrawal approved"
+                      : withdrawal.status === "rejected"
+                      ? "Withdrawal rejected"
+                      : "Withdrawal pending"}
+                  </div>
                   <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.6)" }}>
-                    ${Number(pendingWithdrawal.amountUsd).toFixed(2)} requested{" "}
-                    {new Date(pendingWithdrawal.createdAt).toLocaleString()} — awaiting admin approval, held out of
-                    your available cash until then.
+                    {withdrawal.status === "approved" ? (
+                      <>${Number(withdrawal.amountUsd).toFixed(2)} approved — it should show up in your wallet within 5–10 minutes.</>
+                    ) : withdrawal.status === "rejected" ? (
+                      <>${Number(withdrawal.amountUsd).toFixed(2)} was rejected and returned to your cash balance.</>
+                    ) : (
+                      <>
+                        ${Number(withdrawal.amountUsd).toFixed(2)} requested {new Date(withdrawal.createdAt).toLocaleString()} — awaiting
+                        admin approval, held out of your available cash until then.
+                      </>
+                    )}
                   </div>
                 </div>
-                <span className="status-pill pending">Pending</span>
+                {withdrawal.status === "pending" ? (
+                  <span className="status-pill pending">Pending</span>
+                ) : (
+                  <button className="btn-secondary" style={{ padding: "6px 14px", fontSize: 12.5 }} onClick={dismissWithdrawalBanner}>
+                    Dismiss
+                  </button>
+                )}
               </div>
             )}
 

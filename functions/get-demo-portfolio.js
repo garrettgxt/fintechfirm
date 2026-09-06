@@ -1,11 +1,12 @@
 // Cloudflare Pages Function: returns a wallet's demo cash balance, demo
-// positions, and any pending withdrawal request (see
-// create-demo-withdraw-request.js — withdrawals need admin approval, so
-// the Dashboard needs to know if one is outstanding to show the
-// "Withdrawal pending" banner). The frontend computes current market
-// value itself from quotes it already has (live crypto prices / polled
-// stock-forex quotes) rather than this function fetching prices too —
-// avoids duplicate calls.
+// positions, and its most recent withdrawal request of ANY status (see
+// create-demo-withdraw-request.js — withdrawals need admin approval).
+// Not just the pending one: once an admin reviews it, the Dashboard
+// still needs to show the outcome (an "approved" or "rejected" banner)
+// rather than the request just silently vanishing. The frontend computes
+// current market value itself from quotes it already has (live crypto
+// prices / polled stock-forex quotes) rather than this function fetching
+// prices too — avoids duplicate calls.
 
 export async function onRequest(context) {
   const url = new URL(context.request.url);
@@ -31,7 +32,7 @@ export async function onRequest(context) {
         { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } }
       ),
       fetch(
-        `${supabaseUrl}/rest/v1/demo_withdraw_requests?wallet_address=eq.${encodeURIComponent(walletAddress)}&status=eq.pending&select=id,amount_usd,created_at`,
+        `${supabaseUrl}/rest/v1/demo_withdraw_requests?wallet_address=eq.${encodeURIComponent(walletAddress)}&select=id,amount_usd,status,created_at,reviewed_at&order=created_at.desc&limit=1`,
         { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } }
       ),
     ]);
@@ -42,7 +43,7 @@ export async function onRequest(context) {
 
     const overrideRows = await overrideRes.json();
     const positions = await positionsRes.json();
-    const [pendingWithdrawRow] = await withdrawRes.json();
+    const [withdrawRow] = await withdrawRes.json();
     const wallet = overrideRows[0];
 
     return new Response(
@@ -55,8 +56,14 @@ export async function onRequest(context) {
           quantity: p.quantity,
           avgCost: p.avg_cost_usd,
         })),
-        pendingWithdrawal: pendingWithdrawRow
-          ? { id: pendingWithdrawRow.id, amountUsd: pendingWithdrawRow.amount_usd, createdAt: pendingWithdrawRow.created_at }
+        withdrawal: withdrawRow
+          ? {
+              id: withdrawRow.id,
+              amountUsd: withdrawRow.amount_usd,
+              status: withdrawRow.status,
+              createdAt: withdrawRow.created_at,
+              reviewedAt: withdrawRow.reviewed_at,
+            }
           : null,
       }),
       { status: 200, headers: { "Content-Type": "application/json" } }

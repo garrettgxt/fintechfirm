@@ -192,6 +192,28 @@
   `demo_withdraw_requests`. Scoped to Demo Mode only — the real (non-
   demo) account's sidebar/mobile-nav "Add funds" and Site Credit deposit
   flow are unchanged.
+  IMPORTANT FOLLOW-UP, same day: originally get-demo-portfolio.js only
+  ever returned a PENDING request, so the moment an admin approved or
+  rejected one, it just vanished from the response with no confirmation
+  shown to the user. Changed to return the wallet's single most recent
+  withdrawal request regardless of status (`withdrawal` in both the API
+  response and Dashboard.jsx's state, renamed from `pendingWithdrawal`)
+  so the outcome banner can say what actually happened: approved shows
+  "$X approved -- it should show up in your wallet within 5-10 minutes"
+  (sage), rejected shows the amount was returned to cash (rust), pending
+  is unchanged (amber, disables the Withdraw button; `.withdraw-status-
+  banner` in styles.css, renamed from `.withdraw-pending-banner`). Since
+  this is no longer just a pending flag, an approved/rejected banner
+  needs a way to go away -- added a "Dismiss" button that stores the
+  just-reviewed request's id in `localStorage`
+  (`dismissedWithdrawalId`) so it survives a reload but a NEW request (a
+  different id) always shows its own banner regardless of past
+  dismissals. There's still no polling -- same one-time-per-mount fetch
+  pattern as the rest of the demo portfolio state -- so a tab already
+  open when an admin approves won't show it until the page is next
+  reloaded or another action re-triggers `refreshDemoPortfolio`; the
+  "5-10 minutes" copy is scene-setting for a simulated feature, not a
+  real transfer delay.
 - AssetDetailPanel.jsx's Buy/Sell panel no longer displays "Demo cash:
   $X" — user feedback was that this is redundant once the account is
   already known to be in Demo Mode (shown elsewhere via the "Demo" badge
