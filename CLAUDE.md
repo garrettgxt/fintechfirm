@@ -95,17 +95,25 @@
   worth it for a demo feature.
 - NEW ACCOUNTS DEFAULT TO DEMO MODE ON (2026-09-06, explicit user
   request): `wallet_overrides.demo_mode`'s column DEFAULT is now `true`
-  (was `false`) and `demo_balance_usd`'s is `10000` (was `0`, standard
-  paper-trading starting balance — Demo Mode "on" with $0 to trade would
-  look broken for a first-time user). functions/register-wallet.js's
-  insert deliberately only ever sets wallet_address + email, omitting
-  demo_mode/demo_balance_usd entirely, so this is a pure column-default
-  change (supabase/migrations/20260906060000_default_new_accounts_to_demo_mode.sql)
-  with zero code change needed there. ALTER COLUMN ... SET DEFAULT only
-  affects future inserts, not existing rows — every wallet that already
-  existed keeps whatever demo_mode/balance it already had. The admin
-  panel is still the only way to turn Demo Mode OFF for a wallet (opt-out
-  now, instead of opt-in).
+  (was `false`). functions/register-wallet.js's insert deliberately only
+  ever sets wallet_address + email, omitting demo_mode/demo_balance_usd
+  entirely, so this is a pure column-default change (supabase/migrations/
+  20260906060000_default_new_accounts_to_demo_mode.sql) with zero code
+  change needed there. ALTER COLUMN ... SET DEFAULT only affects future
+  inserts, not existing rows — every wallet that already existed keeps
+  whatever demo_mode/balance it already had. The admin panel is still the
+  only way to turn Demo Mode OFF for a wallet (opt-out now, instead of
+  opt-in).
+- `demo_balance_usd`'s column DEFAULT went `0` -> `10000` (same migration
+  as above, reasoning: Demo Mode "on" with $0 to trade would look broken
+  for a first-time user) -> back to `0` (supabase/migrations/
+  20260906080000_new_account_demo_balance_zero.sql, explicit user
+  request, same day). A new account now starts in Demo Mode with $0 —
+  they self-serve top up via "Add funds" (AddDemoFundsModal.jsx /
+  functions/add-demo-funds.js) or an admin sets a starting balance via
+  /admin. If asked to change this default again, it's this same single
+  `alter table wallet_overrides alter column demo_balance_usd set default
+  <n>` — no other code involved.
 - Data model: `wallet_overrides.demo_balance_usd` is the demo CASH
   balance (used to mean "total shown on dashboard" before this — that
   older meaning is gone). `demo_positions` (new table, wallet_address +
