@@ -7,6 +7,7 @@ import PriceChart from "../components/PriceChart.jsx";
 import Sparkline from "../components/Sparkline.jsx";
 import CreditInvoiceModal from "../components/CreditInvoiceModal.jsx";
 import AddDemoFundsModal from "../components/AddDemoFundsModal.jsx";
+import WithdrawDemoFundsModal from "../components/WithdrawDemoFundsModal.jsx";
 import AssetSearch from "../components/AssetSearch.jsx";
 import AssetDetailPanel from "../components/AssetDetailPanel.jsx";
 import { consumePendingAsset } from "../pendingAsset.js";
@@ -18,10 +19,12 @@ export default function Dashboard() {
   const [demoMode, setDemoMode] = useState(false);
   const [demoCashUsd, setDemoCashUsd] = useState(0);
   const [demoPositions, setDemoPositions] = useState([]); // [{symbol, assetType, quantity, avgCost}]
+  const [pendingWithdrawal, setPendingWithdrawal] = useState(null); // {id, amountUsd, createdAt} | null
   const [tab, setTab] = useState("portfolio");
   const [balanceDelta, setBalanceDelta] = useState(null); // { amount, direction } — a brief "+$0.03" flash
   const [creditOpen, setCreditOpen] = useState(false);
   const [demoFundsOpen, setDemoFundsOpen] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [creditCurrency, setCreditCurrency] = useState("eth"); // which coin is preselected when the modal opens
   const [creditBalance, setCreditBalance] = useState(0); // custodial site-credit balance, NOT on-chain funds
   const [selectedAsset, setSelectedAsset] = useState(null); // asset object when tab === "asset"
@@ -93,6 +96,7 @@ export default function Dashboard() {
         // side (apply_demo_trade) already deletes these on sell, but a
         // holding this small is never meaningful to show regardless.
         setDemoPositions((data.positions ?? []).filter((p) => p.quantity > 1e-8));
+        setPendingWithdrawal(data.pendingWithdrawal ?? null);
       })
       .catch((err) => console.error("Failed to fetch demo portfolio:", err));
   }
@@ -335,13 +339,35 @@ export default function Dashboard() {
                 {demoMode ? (
                   <>
                     <button className="btn-primary" onClick={() => setTab("markets")}>Invest in stocks</button>
-                    <button className="btn-secondary" onClick={() => setDemoFundsOpen(true)}>+ Add funds</button>
+                    <button className="btn-secondary" onClick={() => setDemoFundsOpen(true)}>+ Deposit</button>
+                    <button
+                      className="btn-secondary"
+                      onClick={() => setWithdrawOpen(true)}
+                      disabled={!!pendingWithdrawal}
+                      title={pendingWithdrawal ? "You already have a withdrawal pending review" : undefined}
+                    >
+                      Withdraw
+                    </button>
                   </>
                 ) : (
                   <button className="btn-secondary" onClick={() => openAddFunds()}>Add funds</button>
                 )}
               </div>
             </div>
+
+            {demoMode && pendingWithdrawal && (
+              <div className="withdraw-pending-banner">
+                <div>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>Withdrawal pending</div>
+                  <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.6)" }}>
+                    ${Number(pendingWithdrawal.amountUsd).toFixed(2)} requested{" "}
+                    {new Date(pendingWithdrawal.createdAt).toLocaleString()} — awaiting admin approval, held out of
+                    your available cash until then.
+                  </div>
+                </div>
+                <span className="status-pill pending">Pending</span>
+              </div>
+            )}
 
             {demoMode && (
               <>
@@ -481,6 +507,15 @@ export default function Dashboard() {
           walletAddress={walletAddress}
           onClose={() => setDemoFundsOpen(false)}
           onAdded={refreshDemoPortfolio}
+        />
+      )}
+
+      {withdrawOpen && (
+        <WithdrawDemoFundsModal
+          walletAddress={walletAddress}
+          cashUsd={demoCashUsd}
+          onClose={() => setWithdrawOpen(false)}
+          onRequested={refreshDemoPortfolio}
         />
       )}
     </div>

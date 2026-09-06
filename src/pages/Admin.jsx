@@ -25,6 +25,7 @@ export default function Admin() {
   const [authed, setAuthed] = useState(false);
   const [wallets, setWallets] = useState([]);
   const [depositRequests, setDepositRequests] = useState([]);
+  const [withdrawRequests, setWithdrawRequests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -44,6 +45,7 @@ export default function Admin() {
       setWallets(data.wallets);
       setAuthed(true);
       loadDepositRequests(pwd);
+      loadWithdrawRequests(pwd);
     } catch (e) {
       setError("Network error");
     } finally {
@@ -70,6 +72,27 @@ export default function Admin() {
       body: JSON.stringify({ requestId, action }),
     });
     loadDepositRequests(password);
+  }
+
+  async function loadWithdrawRequests(pwd) {
+    try {
+      const res = await fetch("/admin-list-demo-withdraw-requests", {
+        headers: { "x-admin-password": pwd },
+      });
+      const data = await res.json();
+      if (res.ok) setWithdrawRequests(data.requests);
+    } catch (e) {
+      console.error("Failed to load withdrawal requests:", e);
+    }
+  }
+
+  async function reviewWithdraw(requestId, action) {
+    await fetch("/admin-review-demo-withdraw", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      body: JSON.stringify({ requestId, action }),
+    });
+    loadWithdrawRequests(password);
   }
 
   async function updateWallet(walletAddress, demoMode, demoBalanceUsd) {
@@ -172,6 +195,47 @@ export default function Admin() {
                     Approve
                   </button>
                   <button className="btn-secondary" onClick={() => reviewDeposit(r.id, "reject")}>
+                    Reject
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <h1 className="serif" style={{ fontSize: 26, marginBottom: 12 }}>Admin — Pending demo withdrawal requests</h1>
+      <div style={{ fontSize: 13, color: "rgba(237,231,218,0.5)", marginBottom: 24 }}>
+        Demo Mode is fake money, but withdrawals still go through the same review step as real deposits — the
+        requested amount is already held aside from that wallet's cash balance. Approve just marks it reviewed;
+        reject refunds the amount back to their demo cash.
+      </div>
+
+      {withdrawRequests.length === 0 ? (
+        <div style={{ fontSize: 13.5, color: "rgba(237,231,218,0.45)", marginBottom: 32 }}>
+          No pending withdrawal requests.
+        </div>
+      ) : (
+        <div style={{ marginBottom: 32 }}>
+          {withdrawRequests.map((r) => (
+            <div key={r.id} style={{ background: "var(--ink-2)", border: "1px solid var(--line)", borderRadius: 6, padding: 20, marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+                <div>
+                  <div className="num" style={{ fontSize: 15, fontWeight: 600 }}>
+                    ${Number(r.amount_usd).toFixed(2)} — demo cash
+                  </div>
+                  <div className="num" style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)", marginTop: 4 }}>
+                    {r.wallet_address}
+                  </div>
+                  <div style={{ fontSize: 12, color: "rgba(237,231,218,0.4)", marginTop: 4 }}>
+                    {new Date(r.created_at).toLocaleString()}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="btn-primary" onClick={() => reviewWithdraw(r.id, "approve")}>
+                    Approve
+                  </button>
+                  <button className="btn-secondary" onClick={() => reviewWithdraw(r.id, "reject")}>
                     Reject
                   </button>
                 </div>

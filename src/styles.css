@@ -121,6 +121,13 @@ td{ padding:16px 28px; border-top:1px solid var(--line); font-size:14.5px; }
 
 .status-pill{ font-size:12px; padding:4px 10px; border-radius:20px; display:inline-block; }
 .status-pill.healthy{ background:rgba(92,143,114,0.15); color:var(--sage); }
+.status-pill.pending{ background:rgba(176,138,78,0.16); color:var(--brass-bright); }
+
+.withdraw-pending-banner{
+  background:rgba(176,138,78,0.08); border:1px solid var(--brass); border-radius:6px;
+  padding:20px 28px; margin-bottom:24px; display:flex; justify-content:space-between;
+  align-items:center; flex-wrap:wrap; gap:12px;
+}
 
 footer{ border-top:1px solid var(--line); padding:40px 0; }
 footer .fine{ font-size:12.5px; color:rgba(237,231,218,0.4); max-width:640px; line-height:1.6; }

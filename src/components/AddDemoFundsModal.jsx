@@ -48,16 +48,16 @@ export default function AddDemoFundsModal({ walletAddress, onClose, onAdded }) {
     >
       <div onClick={(e) => e.stopPropagation()} className="credit-invoice">
         <div className="credit-invoice-head">
-          <h2 className="serif" style={{ fontSize: 20 }}>Add demo funds</h2>
+          <h2 className="serif" style={{ fontSize: 20 }}>Deposit</h2>
           <button className="credit-invoice-close" onClick={onClose}>&times;</button>
         </div>
 
         {done ? (
           <div className="credit-paid">
             <div style={{ fontSize: 32, marginBottom: 8 }}>✓</div>
-            <div className="serif" style={{ fontSize: 18, marginBottom: 6 }}>Added</div>
+            <div className="serif" style={{ fontSize: 18, marginBottom: 6 }}>Deposited</div>
             <div style={{ fontSize: 13, color: "rgba(237,231,218,0.6)" }}>
-              ${effectiveAmount.toFixed(2)} added to your demo cash balance.
+              ${effectiveAmount.toFixed(2)} added to your cash balance.
             </div>
             <button className="btn-secondary" style={{ width: "100%", marginTop: 20 }} onClick={onClose}>
               Close
@@ -104,7 +104,7 @@ export default function AddDemoFundsModal({ walletAddress, onClose, onAdded }) {
               onClick={submit}
               disabled={submitting || !isValid}
             >
-              {submitting ? "Adding…" : `Add $${isValid ? effectiveAmount.toLocaleString() : "0"}`}
+              {submitting ? "Depositing…" : `Deposit $${isValid ? effectiveAmount.toLocaleString() : "0"}`}
             </button>
           </>
         )}

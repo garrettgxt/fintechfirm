@@ -2,16 +2,23 @@
 // tied to it, for the admin panel only. Locked behind ADMIN_PASSWORD.
 //
 // Deletes: wallet_overrides (the account itself), demo_positions,
-// demo_orders (Demo Mode state), user_credits (real Site Credit
-// balance), credit_deposit_requests (pending/reviewed deposit claims).
-// Deliberately does NOT touch credit_payments — that's the old
-// NOWPayments audit trail, kept as historical financial record even
-// when the account it's about is gone.
+// demo_orders, demo_withdraw_requests (Demo Mode state), user_credits
+// (real Site Credit balance), credit_deposit_requests (pending/reviewed
+// deposit claims). Deliberately does NOT touch credit_payments — that's
+// the old NOWPayments audit trail, kept as historical financial record
+// even when the account it's about is gone.
 //
 // This is irreversible. There's no undo — the frontend is expected to
 // make the admin confirm before ever calling this.
 
-const WALLET_TABLES = ["demo_positions", "demo_orders", "credit_deposit_requests", "user_credits", "wallet_overrides"];
+const WALLET_TABLES = [
+  "demo_positions",
+  "demo_orders",
+  "demo_withdraw_requests",
+  "credit_deposit_requests",
+  "user_credits",
+  "wallet_overrides",
+];
 
 export async function onRequest(context) {
   if (context.request.method !== "POST") {

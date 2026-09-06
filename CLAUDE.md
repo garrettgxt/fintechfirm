@@ -160,6 +160,38 @@
   Portfolio tab's balance card (shown only when demoMode is true) opens
   AddDemoFundsModal. Two distinct, clearly-labeled entry points, not one
   button that branches.
+- "Deposit" / "Withdraw" (2026-09-06): the Demo Mode balance-card's
+  self-service top-up button was renamed from "+ Add funds" to
+  "+ Deposit" (AddDemoFundsModal.jsx unchanged otherwise — still instant,
+  no review) and a new "Withdraw" button was added next to it, per
+  explicit user request that a Demo Mode withdrawal go through the same
+  admin-approval step real Site Credit deposits already do — even though
+  it's fake money. New table + function (supabase/migrations/
+  20260906233330_add_demo_withdraw_requests.sql): `demo_withdraw_requests`
+  (wallet_address, amount_usd, status ['pending'|'approved'|'rejected'],
+  created_at, reviewed_at) and `create_demo_withdraw_request(p_wallet,
+  p_amount)`, which ESCROWS the amount immediately — subtracts it from
+  demo_balance_usd the moment the request is created, not on approval,
+  same as a real brokerage holding withdrawn funds unavailable while
+  pending — and rejects a second simultaneous request
+  (`withdrawal_already_pending`) so only one can be outstanding per
+  wallet at a time. New functions/create-demo-withdraw-request.js (called
+  by the new src/components/WithdrawDemoFundsModal.jsx),
+  admin-list-demo-withdraw-requests.js, and
+  admin-review-demo-withdraw.js (approve = no further balance change,
+  since it's already deducted; reject = refund via the existing
+  `add_demo_funds` RPC) — reviewed in a new "Pending demo withdrawal
+  requests" section in Admin.jsx, same layout/pattern as the existing
+  deposit-request review section. get-demo-portfolio.js now also returns
+  `pendingWithdrawal` ({id, amountUsd, createdAt} or null) so
+  Dashboard.jsx can show a clearly-labeled amber "Withdrawal pending"
+  banner (`.withdraw-pending-banner` in styles.css) on the Portfolio tab
+  for as long as one is outstanding, and disable the Withdraw button
+  while it is (only one pending request per wallet, enforced server-side
+  too). admin-delete-wallet.js's cleanup list now includes
+  `demo_withdraw_requests`. Scoped to Demo Mode only — the real (non-
+  demo) account's sidebar/mobile-nav "Add funds" and Site Credit deposit
+  flow are unchanged.
 - AssetDetailPanel.jsx's Buy/Sell panel no longer displays "Demo cash:
   $X" — user feedback was that this is redundant once the account is
   already known to be in Demo Mode (shown elsewhere via the "Demo" badge
