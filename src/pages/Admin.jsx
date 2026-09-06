@@ -90,6 +90,15 @@ export default function Admin() {
     loadWallets(password);
   }
 
+  async function deleteWallet(walletAddress) {
+    await fetch("/admin-delete-wallet", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      body: JSON.stringify({ walletAddress }),
+    });
+    loadWallets(password);
+  }
+
   if (!authed) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -183,15 +192,16 @@ export default function Admin() {
       </div>
 
       {wallets.map((w) => (
-        <WalletRow key={w.wallet_address} wallet={w} onUpdate={updateWallet} onReset={resetPortfolio} />
+        <WalletRow key={w.wallet_address} wallet={w} onUpdate={updateWallet} onReset={resetPortfolio} onDelete={deleteWallet} />
       ))}
     </div>
   );
 }
 
-function WalletRow({ wallet, onUpdate, onReset }) {
+function WalletRow({ wallet, onUpdate, onReset, onDelete }) {
   const [demoMode, setDemoMode] = useState(wallet.demo_mode);
   const [demoBalance, setDemoBalance] = useState(wallet.demo_balance_usd);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   return (
     <div style={{ background: "var(--ink-2)", border: "1px solid var(--line)", borderRadius: 6, padding: 20, marginBottom: 12 }}>
@@ -232,6 +242,35 @@ function WalletRow({ wallet, onUpdate, onReset }) {
         >
           Reset portfolio
         </button>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--line)" }}>
+        {confirmingDelete ? (
+          <>
+            <span style={{ fontSize: 12.5, color: "var(--rust)" }}>
+              Delete this account and all its data (demo positions/orders, Site Credit balance, deposit
+              requests)? This can't be undone.
+            </span>
+            <button
+              className="btn-secondary"
+              style={{ borderColor: "var(--rust)", color: "var(--rust)" }}
+              onClick={() => onDelete(wallet.wallet_address)}
+            >
+              Confirm delete
+            </button>
+            <button className="btn-secondary" onClick={() => setConfirmingDelete(false)}>
+              Cancel
+            </button>
+          </>
+        ) : (
+          <button
+            className="btn-secondary"
+            style={{ borderColor: "var(--rust)", color: "var(--rust)" }}
+            onClick={() => setConfirmingDelete(true)}
+          >
+            Delete account
+          </button>
+        )}
       </div>
     </div>
   );

@@ -93,6 +93,15 @@
   fields (demo_asset, demo_asset_amount) are no longer written to or
   read anywhere — left in the DB unused rather than migrated away, not
   worth it for a demo feature.
+- "Delete account" (2026-09-06): functions/admin-delete-wallet.js deletes
+  a wallet from `demo_positions`, `demo_orders`, `credit_deposit_requests`,
+  `user_credits` (their real Site Credit balance), and `wallet_overrides`
+  (the account itself) — irreversible. Deliberately does NOT touch
+  `credit_payments` (the old NOWPayments audit trail) — that's kept as a
+  historical financial record even once the account it's about is gone.
+  Admin.jsx requires an explicit two-step in-UI confirmation (click
+  "Delete account" -> a red "Confirm delete" appears alongside "Cancel")
+  before calling this — never wire a delete straight to a single click.
 - NEW ACCOUNTS DEFAULT TO DEMO MODE ON (2026-09-06, explicit user
   request): `wallet_overrides.demo_mode`'s column DEFAULT is now `true`
   (was `false`). functions/register-wallet.js's insert deliberately only
