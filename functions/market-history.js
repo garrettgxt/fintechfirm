@@ -1,17 +1,19 @@
 // Cloudflare Pages Function: historical candles for stocks/ETFs/forex via
 // Twelve Data's time_series endpoint, reshaped into the same
-// {time, value}[] format PriceChart.jsx already uses for crypto (from
-// Binance klines), and cached the same way as market-quote.js.
+// {time, value}[] format PriceChart.jsx uses for crypto (from Binance
+// klines), and cached the same way as market-quote.js.
+//
+// CURRENTLY UNUSED (2026-09-06): src/hooks/useAssetHistory.js no longer
+// calls this for non-crypto symbols — PriceChart.jsx and
+// AssetDetailPanel.jsx render TradingView's free embed widget for
+// stocks/ETFs/forex instead (see src/components/TradingViewWidget.jsx).
+// This endpoint's time_series calls were the dominant cost behind a real
+// credit-exhaustion incident (not batchable, unlike /quote — one call
+// per symbol per range) and TradingView's chart costs us nothing.
+// Left in place rather than deleted in case a future feature needs raw
+// history data again (e.g. server-side analytics) — see CLAUDE.md.
 //
 // SETUP: same TWELVE_DATA_API_KEY as market-quote.js.
-//
-// Every distinct symbol+interval+outputsize combination is its own cache
-// key, and Twelve Data meters time_series calls the same way as quotes
-// (credits, not just a rate limit) — a longer-range chart (3M/6M/YTD/1Y/
-// 5Y/10Y) barely changes minute to minute, so this is cached much longer
-// than a live quote. See market-quote.js for the incident that motivated
-// this (the free tier's 800/day credit cap was blown through in under 20
-// minutes with a 45s cache).
 
 export async function onRequest(context) {
   const url = new URL(context.request.url);

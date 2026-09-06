@@ -37,6 +37,30 @@ export const FOREX = [
   { symbol: "USD/JPY", name: "US Dollar / Japanese Yen", type: "forex" },
 ];
 
+// TradingView's free embeddable chart widgets need an exchange-prefixed
+// symbol. Charts for these 11 symbols moved to TradingView (see
+// src/components/TradingViewWidget.jsx) because Twelve Data's
+// time_series endpoint isn't batchable and was the dominant cost behind
+// the free-tier credit exhaustion documented in CLAUDE.md — TradingView
+// serves the chart itself from its own infrastructure, at zero credit
+// cost to us. The numeric price used for Buy/Sell math and portfolio
+// valuation still comes from Twelve Data's (cheap, batched) /quote
+// endpoint via functions/market-quote.js — TradingView's free widgets
+// don't expose a JS API to read a price out of them.
+export const TV_SYMBOLS = {
+  AAPL: "NASDAQ:AAPL",
+  MSFT: "NASDAQ:MSFT",
+  AMZN: "NASDAQ:AMZN",
+  NVDA: "NASDAQ:NVDA",
+  TSLA: "NASDAQ:TSLA",
+  NFLX: "NASDAQ:NFLX",
+  SPY: "AMEX:SPY",
+  QQQ: "NASDAQ:QQQ",
+  DIA: "AMEX:DIA",
+  "EUR/USD": "FX:EURUSD",
+  "USD/JPY": "FX:USDJPY",
+};
+
 export const CRYPTO = [
   { symbol: "BTC", name: "Bitcoin", type: "crypto" },
   { symbol: "ETH", name: "Ethereum", type: "crypto" },

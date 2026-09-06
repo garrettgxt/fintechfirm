@@ -3,11 +3,16 @@ import { createChart, AreaSeries } from "lightweight-charts";
 import { useLivePrices } from "../hooks/useLivePrices.js";
 import { useAssetHistory } from "../hooks/useAssetHistory.js";
 import { formatPrice } from "../formatPrice.js";
+import { TV_SYMBOLS } from "../assetCatalog.js";
+import TradingViewWidget from "./TradingViewWidget.jsx";
 
-// Full range set, matching the reference screenshots. Crypto ranges pull
-// from Binance klines (generous free limits); stock/ETF/forex ranges pull
-// from functions/market-history.js (Twelve Data, rate-limited — see
-// useAssetHistory.js for the shared request queue that protects it).
+// Full range set, matching the reference screenshots — crypto only.
+// Stock/ETF/forex charts are TradingView's free embed widget instead
+// (see TradingViewWidget.jsx and PriceChart.jsx for why: Twelve Data's
+// time_series endpoint isn't batchable and was the dominant cost behind
+// a real credit-exhaustion incident, documented in CLAUDE.md). The
+// widget has its own built-in date-range tabs, so there's no separate
+// range toggle needed for non-crypto here.
 const CRYPTO_RANGES = [
   { label: "1D", interval: "5m", limit: 288 },
   { label: "1W", interval: "1h", limit: 168 },
@@ -18,17 +23,6 @@ const CRYPTO_RANGES = [
   { label: "1Y", interval: "1d", limit: 365 },
   { label: "5Y", interval: "1w", limit: 260 },
   { label: "10Y", interval: "1w", limit: 520 },
-];
-const MARKET_RANGES = [
-  { label: "1D", interval: "5min", outputsize: 100 },
-  { label: "1W", interval: "1h", outputsize: 168 },
-  { label: "1M", interval: "1day", outputsize: 30 },
-  { label: "3M", interval: "1day", outputsize: 90 },
-  { label: "6M", interval: "1day", outputsize: 180 },
-  { label: "YTD", interval: "1day", outputsize: 260 },
-  { label: "1Y", interval: "1day", outputsize: 365 },
-  { label: "5Y", interval: "1week", outputsize: 260 },
-  { label: "10Y", interval: "1week", outputsize: 520 },
 ];
 
 const UP_COLORS = { lineColor: "#5C8F72", topColor: "rgba(92,143,114,0.28)" };
@@ -62,11 +56,10 @@ export default function AssetDetailPanel({
 }) {
   const { symbol, name, type } = asset;
   const isCrypto = type === "crypto";
-  const ranges = isCrypto ? CRYPTO_RANGES : MARKET_RANGES;
   const containerRef = useRef(null);
   const chartRef = useRef(null);
   const seriesRef = useRef(null);
-  const [range, setRange] = useState(ranges[0]);
+  const [range, setRange] = useState(CRYPTO_RANGES[0]);
   const [cryptoStats, setCryptoStats] = useState(null); // Binance 24hr ticker, crypto only
 
   const cryptoPrices = useLivePrices();
@@ -74,7 +67,7 @@ export default function AssetDetailPanel({
   const price = live?.price ?? null;
   const changePct = live?.changePct ?? live?.changePct24h ?? null;
   const isUp = (changePct ?? 0) >= 0;
-  const points = useAssetHistory(symbol, type, range);
+  const points = useAssetHistory(symbol, type, range, isCrypto);
 
   // Trade panel state.
   const [side, setSide] = useState("buy");
@@ -114,6 +107,7 @@ export default function AssetDetailPanel({
   }, [symbol, isCrypto]);
 
   useEffect(() => {
+    if (!isCrypto) return;
     const chart = createChart(containerRef.current, {
       width: containerRef.current.clientWidth,
       height: 360,
@@ -156,22 +150,23 @@ export default function AssetDetailPanel({
       chartRef.current = null;
       seriesRef.current = null;
     };
-  }, [symbol]);
+  }, [symbol, isCrypto]);
 
   useEffect(() => {
+    if (!isCrypto) return;
     seriesRef.current?.applyOptions(isUp ? UP_COLORS : DOWN_COLORS);
-  }, [isUp]);
+  }, [isUp, isCrypto]);
 
   useEffect(() => {
-    if (!points || !seriesRef.current) return;
+    if (!isCrypto || !points || !seriesRef.current) return;
     seriesRef.current.setData(points);
     chartRef.current?.timeScale().fitContent();
-  }, [points]);
+  }, [points, isCrypto]);
 
   useEffect(() => {
-    if (price == null || !seriesRef.current) return;
+    if (!isCrypto || price == null || !seriesRef.current) return;
     seriesRef.current.update({ time: Math.floor(Date.now() / 1000), value: price });
-  }, [price]);
+  }, [price, isCrypto]);
 
   const changeColor = isUp ? "var(--sage)" : "var(--rust)";
 
@@ -292,14 +287,20 @@ export default function AssetDetailPanel({
 
       <div className="asset-detail-grid">
         <div>
-          <div className="chart-range-toggle">
-            {ranges.map((r) => (
-              <button key={r.label} className={r.label === range.label ? "active" : ""} onClick={() => setRange(r)}>
-                {r.label}
-              </button>
-            ))}
-          </div>
-          <div ref={containerRef} className="chart-canvas" style={{ height: 360 }} />
+          {isCrypto ? (
+            <>
+              <div className="chart-range-toggle">
+                {CRYPTO_RANGES.map((r) => (
+                  <button key={r.label} className={r.label === range.label ? "active" : ""} onClick={() => setRange(r)}>
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+              <div ref={containerRef} className="chart-canvas" style={{ height: 360 }} />
+            </>
+          ) : (
+            <TradingViewWidget tvSymbol={TV_SYMBOLS[symbol]} height={360} />
+          )}
 
           <div className="panel" style={{ marginTop: 24 }}>
             <h3>Market details</h3>

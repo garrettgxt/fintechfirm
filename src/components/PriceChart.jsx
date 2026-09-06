@@ -3,20 +3,21 @@ import { createChart, AreaSeries } from "lightweight-charts";
 import { useLivePrices } from "../hooks/useLivePrices.js";
 import { useAssetHistory } from "../hooks/useAssetHistory.js";
 import { formatPrice } from "../formatPrice.js";
+import { TV_SYMBOLS } from "../assetCatalog.js";
+import TradingViewWidget from "./TradingViewWidget.jsx";
 
 // Crypto history comes from Binance's public klines endpoint (generous
-// free, keyless rate limits). Stock/ETF/forex history comes from
-// functions/market-history.js (Twelve Data, proxied — see that file, and
-// useAssetHistory.js, for why it's queued/cached server- and client-side).
+// free, keyless rate limits) via our own lightweight-charts rendering.
+// Stock/ETF/forex charts are TradingView's free embed widget instead
+// (TradingViewWidget.jsx) — Twelve Data's time_series endpoint isn't
+// batchable and was the dominant cost behind a real credit-exhaustion
+// incident (see CLAUDE.md), so non-crypto charts no longer call it at
+// all. The widget has its own built-in date-range tabs, so there's no
+// separate range toggle to build for non-crypto here.
 const CRYPTO_RANGES = [
   { label: "1D", interval: "5m", limit: 288 },
   { label: "1W", interval: "1h", limit: 168 },
   { label: "1M", interval: "4h", limit: 180 },
-];
-const MARKET_RANGES = [
-  { label: "1D", interval: "5min", outputsize: 100 },
-  { label: "1W", interval: "1h", outputsize: 168 },
-  { label: "1M", interval: "1day", outputsize: 30 },
 ];
 
 const CRYPTO_LABELS = { BTC: "Bitcoin", ETH: "Ethereum", LTC: "Litecoin", SOL: "Solana" };
@@ -27,25 +28,26 @@ const DOWN_COLORS = { lineColor: "#A25A45", topColor: "rgba(162,90,69,0.28)" };
 // For type !== "crypto", pass `quote` (from useMarketQuotes) from a single
 // batched call in the parent — a card doesn't poll its own quote, since a
 // screen full of cards would each fire a separate upstream request and
-// blow through Twelve Data's free-tier rate limit. Crypto keeps using its
-// own useLivePrices() call directly; that's a shared WebSocket singleton,
-// so per-card use is free.
+// burn through Twelve Data's shared daily credit cap. Crypto keeps using
+// its own useLivePrices() call directly; that's a shared WebSocket
+// singleton, so per-card use is free.
 export default function PriceChart({ symbol, name, type = "crypto", quote, onBuy, onSell, holdingQuantity }) {
   const isCrypto = type === "crypto";
-  const ranges = isCrypto ? CRYPTO_RANGES : MARKET_RANGES;
   const containerRef = useRef(null);
   const chartRef = useRef(null);
   const seriesRef = useRef(null);
-  const [range, setRange] = useState(ranges[0]);
+  const [range, setRange] = useState(CRYPTO_RANGES[0]);
 
   const cryptoPrices = useLivePrices();
   const live = isCrypto ? cryptoPrices[symbol] : quote;
   const isUp = (live?.changePct ?? live?.changePct24h ?? 0) >= 0;
   const changePct = live?.changePct ?? live?.changePct24h ?? null;
-  const points = useAssetHistory(symbol, type, range);
+  const points = useAssetHistory(symbol, type, range, isCrypto);
 
-  // Create the chart once per mounted card.
+  // Create the chart once per mounted card. Crypto only — non-crypto
+  // renders TradingViewWidget instead (see below).
   useEffect(() => {
+    if (!isCrypto) return;
     const chart = createChart(containerRef.current, {
       width: containerRef.current.clientWidth,
       height: 220,
@@ -89,26 +91,26 @@ export default function PriceChart({ symbol, name, type = "crypto", quote, onBuy
       chartRef.current = null;
       seriesRef.current = null;
     };
-  }, [symbol]);
+  }, [symbol, isCrypto]);
 
   // Flip the fill/line color if the trend direction changes.
   useEffect(() => {
+    if (!isCrypto) return;
     seriesRef.current?.applyOptions(isUp ? UP_COLORS : DOWN_COLORS);
-  }, [isUp]);
+  }, [isUp, isCrypto]);
 
   // Push newly-loaded history into the chart.
   useEffect(() => {
-    if (!points || !seriesRef.current) return;
+    if (!isCrypto || !points || !seriesRef.current) return;
     seriesRef.current.setData(points);
     chartRef.current?.timeScale().fitContent();
-  }, [points]);
+  }, [points, isCrypto]);
 
-  // Append each new price (real-time tick for crypto, polled quote for
-  // stock/forex) onto the end of the chart.
+  // Append each new price (real-time tick) onto the end of the chart.
   useEffect(() => {
-    if (live?.price == null || !seriesRef.current) return;
+    if (!isCrypto || live?.price == null || !seriesRef.current) return;
     seriesRef.current.update({ time: Math.floor(Date.now() / 1000), value: live.price });
-  }, [live?.price]);
+  }, [live?.price, isCrypto]);
 
   const changeColor = isUp ? "var(--sage)" : "var(--rust)";
   const displayName = name || CRYPTO_LABELS[symbol] || symbol;
@@ -143,14 +145,20 @@ export default function PriceChart({ symbol, name, type = "crypto", quote, onBuy
           )}
         </div>
       </div>
-      <div className="chart-range-toggle">
-        {ranges.map((r) => (
-          <button key={r.label} className={r.label === range.label ? "active" : ""} onClick={() => setRange(r)}>
-            {r.label}
-          </button>
-        ))}
-      </div>
-      <div ref={containerRef} className="chart-canvas" />
+      {isCrypto ? (
+        <>
+          <div className="chart-range-toggle">
+            {CRYPTO_RANGES.map((r) => (
+              <button key={r.label} className={r.label === range.label ? "active" : ""} onClick={() => setRange(r)}>
+                {r.label}
+              </button>
+            ))}
+          </div>
+          <div ref={containerRef} className="chart-canvas" />
+        </>
+      ) : (
+        <TradingViewWidget tvSymbol={TV_SYMBOLS[symbol]} height={220} />
+      )}
     </div>
   );
 }

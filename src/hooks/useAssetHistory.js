@@ -39,12 +39,17 @@ function buildUrl(symbol, isCrypto, range) {
 
 // Returns the chart points array ({time, value}[]), or null while loading
 // / on failure (caller decides how to render that — e.g. keep showing the
-// previous range's data, or a loading state).
-export function useAssetHistory(symbol, type, range) {
+// previous range's data, or a loading state). Pass enabled=false to skip
+// fetching entirely (still called unconditionally to satisfy the rules
+// of hooks) — used for non-crypto symbols now that their chart rendering
+// moved to TradingView's free embed widget (see TradingViewWidget.jsx),
+// so nothing should still be calling market-history.js for them.
+export function useAssetHistory(symbol, type, range, enabled = true) {
   const isCrypto = type === "crypto";
   const [points, setPoints] = useState(null);
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     const url = buildUrl(symbol, isCrypto, range);
     const maxAttempts = isCrypto ? 3 : 4;
@@ -90,7 +95,7 @@ export function useAssetHistory(symbol, type, range) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbol, isCrypto, range.interval, range.limit, range.outputsize]);
+  }, [symbol, isCrypto, range.interval, range.limit, range.outputsize, enabled]);
 
   return points;
 }

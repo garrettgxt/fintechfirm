@@ -223,77 +223,69 @@
   but if this ever becomes a real perf complaint, lazy-loading/pagination
   on that tab (rather than shrinking the catalog) is the fix to reach for.
 
-## Market Data for Stocks/ETFs/Forex (Twelve Data)
+## Market Data for Stocks/ETFs/Forex (Twelve Data for quotes, TradingView for charts)
 - Crypto is untouched — still Coinbase WS (live ticks) + Binance klines
-  (history), see Live Market Data above. Stocks/ETFs/forex use a
-  different provider, Twelve Data, since neither Coinbase nor Binance
-  cover those: functions/market-quote.js (batched live quotes) and
-  functions/market-history.js (historical candles, reshaped into the
-  same {time, value}[] PriceChart.jsx already expects for crypto).
-- Needs `TWELVE_DATA_API_KEY` (Cloudflare secret) — now set, from the
-  user's own Twelve Data account (free tier).
-- IMPORTANT INCIDENT (2026-09-06): the free tier's 800 credits/day cap was
-  found completely exhausted (1995 credits used against an 800 cap,
-  confirmed via a direct call to Twelve Data's own /api_usage endpoint,
-  which returned "You have run out of API credits for the day"). This is
-  why stocks/ETFs/indices were stuck on "Loading..." — NOT a code bug,
-  Twelve Data was simply refusing every request with a 429 until its own
-  daily reset. Root cause: Twelve Data meters a batched /quote call at
-  ONE CREDIT PER SYMBOL, not per HTTP call — with the old 45s cache and
-  Dashboard.jsx polling ~32 non-crypto symbols in one batch, a single open
-  Dashboard tab alone could burn the entire 800/day cap in under 20
-  minutes. market-history.js's time_series calls are metered the same way
-  per symbol+range combination, compounding it further.
-- Fix applied (round 1): market-quote.js's cache TTL went from 45s to
-  300s (5 min), and market-history.js's went from a flat 45s to 300s for
-  intraday ranges (1D/1W) and 3600s (1hr) for daily/weekly-candle ranges
-  (1M and beyond, which don't meaningfully change minute to minute) — see
-  the comments in both files.
-- Fix applied (round 2, same day): the cache change alone didn't hold —
-  usage kept climbing (1995 -> 2313 credits used) because
-  useMarketQuotes(NON_CRYPTO_SYMBOLS) in Dashboard.jsx ran
-  UNCONDITIONALLY at the top of the component, polling all ~32 symbols
-  every 5 minutes for as long as the Dashboard was mounted regardless of
-  which tab was actually open — a user sitting on Portfolio the whole
-  time still cost 32 credits per poll. Replaced the fixed symbol list
-  with `neededNonCryptoSymbols` (useMemo, computed from `tab`,
-  `demoPositions`, `selectedAsset`, `pendingOrders`): the full board only
-  while the Markets tab is open, otherwise just symbols behind an actual
-  position, a pending limit order, or the single asset being viewed.
-  Portfolio-only sessions with no stock/forex exposure now cost 0
-  credits instead of 32 every 5 minutes.
-- Neither fix restores an already-exhausted day's quota — only Twelve
-  Data's own daily reset (or a plan upgrade) does that. And neither
-  removes the underlying cap: sustained real traffic actually using the
-  Markets tab, or several concurrent users, can still exhaust 800/day —
-  the fixes only stop the app from wasting credits on data nobody's
-  looking at. If stock/ETF/forex data needs to be reliably available
-  under real usage (not just occasional demo/dev traffic), a paid Twelve
-  Data
-  plan (removes the daily cap) is the actual fix — flag this to the user
-  rather than continuing to shrink cache windows if it recurs.
-- Just as important: PriceChart.jsx does NOT poll its own quote for
-  non-crypto symbols — it takes a `quote` prop instead, fed by ONE
-  batched src/hooks/useMarketQuotes.js call in the parent (Dashboard.jsx
-  polls all of src/assetCatalog.js's NON_CRYPTO_SYMBOLS at once;
-  Landing.jsx polls just its 4-6 homepage symbols). If you add a new place
-  that renders PriceChart for non-crypto symbols, do the same — don't let
-  PriceChart call useMarketQuotes itself, or a screen full of cards fans
-  out into many separate upstream calls and burns credits many times
-  over for data that's identical across all of them.
-- market-history.js does NOT have the same batching option as quotes —
-  Twelve Data's time_series endpoint is one symbol per call, so every
-  PriceChart/AssetDetailPanel view fetches its own history independently.
-  Confirmed in production early on: a page with just 6 non-crypto cards
-  was enough to 429 every one of them before caching existed at all. All
-  non-crypto history fetches are serialized through a shared queue in
-  src/hooks/useAssetHistory.js (`enqueueHistoryFetch`, ~4s between
-  requests) so a big page (Dashboard's Markets tab has 30+ non-crypto
-  cards) drains through the per-minute rate limit over time instead of
-  overrunning it immediately — expect stock/ETF/forex charts to fill in
-  gradually rather than all at once on a page with many cards. Crypto
-  history (Binance) isn't affected — its limits are generous enough that
-  this was never a problem there.
+  (history), see Live Market Data above.
+- Stock/ETF/forex NUMERIC PRICE (for the header, Buy/Sell math, portfolio
+  valuation, limit-order fill-checking) comes from Twelve Data via
+  functions/market-quote.js (batched — see below for why this is cheap).
+  Needs `TWELVE_DATA_API_KEY` (Cloudflare secret, set from the user's own
+  free-tier Twelve Data account).
+- Stock/ETF/forex CHARTS come from TradingView's free embeddable "Symbol
+  Overview" widget (src/components/TradingViewWidget.jsx), rendered
+  directly by both PriceChart.jsx and AssetDetailPanel.jsx for
+  `type !== "crypto"`. TradingView serves the chart from its own
+  infrastructure via this embed script — zero API credits, no rate limit
+  on our side, no API key needed. The tradeoff: it's a sandboxed iframe
+  with no public JS API on the free tier, so we can't read a numeric
+  price out of it — that's why the quote/price path above still exists
+  separately and independently. src/assetCatalog.js's `TV_SYMBOLS` maps
+  each of our 11 non-crypto symbols to TradingView's exchange-prefixed
+  format (e.g. "NASDAQ:AAPL", "FX:EURUSD"). functions/market-history.js
+  and its Twelve Data time_series calls are now UNUSED (left in place,
+  not deleted, per the comment in that file) — see the incident below for
+  why this changed.
+- IMPORTANT INCIDENT (2026-09-06, several rounds in one day):
+  1. The free tier's 800 credits/day cap was found completely exhausted
+     (1995 used, confirmed via Twelve Data's own /api_usage endpoint
+     returning "You have run out of API credits for the day"). NOT a code
+     bug — root cause: Twelve Data meters a batched /quote call at ONE
+     CREDIT PER SYMBOL, and market-history.js's time_series calls the
+     same way PER SYMBOL PER RANGE (and time_series isn't batchable at
+     all, unlike quotes). With the old 45s cache and ~32 non-crypto
+     symbols, one open Dashboard tab could exhaust the daily cap in under
+     20 minutes.
+  2. Lengthened both endpoints' cache TTLs (quotes to 5 min, history to
+     5min/1hr) — usage kept climbing anyway (1995 -> 2313) because
+     useMarketQuotes(NON_CRYPTO_SYMBOLS) in Dashboard.jsx ran
+     UNCONDITIONALLY regardless of which tab was open. Fixed: Dashboard.jsx
+     now computes `neededNonCryptoSymbols` (useMemo from `tab`,
+     `demoPositions`, `selectedAsset`, `pendingOrders`) — full board only
+     on the Markets tab, otherwise just symbols actually in play.
+  3. Usage STILL climbed (2313 -> 2477) from ordinary public homepage
+     traffic (Landing.jsx's fixed 6-symbol quote+history batch, which
+     wasn't over-fetching but also can't be scoped down further — it's a
+     public marketing page) plus interactive range-switching on cards
+     (each distinct symbol+range combo is its own history cache key, so
+     clicking through ranges keeps generating fresh cache misses). At
+     this point every free-tier lever (caching, scoping, catalog size —
+     see below) had been pulled with no zero-cost option left.
+  4. User's call at that point: trim the non-crypto catalog from 32 to 11
+     symbols (see src/assetCatalog.js's comment) rather than pay or wait.
+  5. Stocks kept showing "Loading..." even after the trim (quota still
+     exhausted, still climbing) — user's final call: stop using Twelve
+     Data's time_series for charts entirely and switch to TradingView's
+     free embed widget for the visual chart, keeping Twelve Data only for
+     the numeric quote (cheap: one batched, cacheable call, not per-range).
+     This is the current architecture described above.
+- Historical note now superseded by the TradingView switch but kept for
+  context: PriceChart.jsx never polls its own quote for non-crypto
+  symbols — it takes a `quote` prop fed by ONE batched
+  src/hooks/useMarketQuotes.js call in the parent (see
+  `neededNonCryptoSymbols` in Dashboard.jsx; Landing.jsx polls its fixed
+  6 homepage symbols). Keep this pattern for any new place that renders
+  PriceChart for non-crypto symbols — don't let PriceChart call
+  useMarketQuotes itself.
 - src/assetCatalog.js's non-crypto side is the curated catalog — trimmed
   2026-09-06 to 6 stocks (AAPL, MSFT, AMZN, NVDA, TSLA, NFLX), 3 index
   ETFs (SPY, QQQ, DIA), 2 forex pairs (EUR/USD, USD/JPY) = 11 symbols
