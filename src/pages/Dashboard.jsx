@@ -9,6 +9,7 @@ import CreditInvoiceModal from "../components/CreditInvoiceModal.jsx";
 import AssetSearch from "../components/AssetSearch.jsx";
 import AssetDetailPanel from "../components/AssetDetailPanel.jsx";
 import { consumePendingAsset } from "../pendingAsset.js";
+import { formatPrice } from "../formatPrice.js";
 
 export default function Dashboard() {
   const { user, logout } = usePrivy();
@@ -410,7 +411,7 @@ export default function Dashboard() {
                               </div>
                             </td>
                             <td className="num">{o.quantity}</td>
-                            <td className="num">${Number(o.limitPrice).toFixed(2)}</td>
+                            <td className="num">{formatPrice(Number(o.limitPrice))}</td>
                             <td style={{ textAlign: "right" }}>
                               <button
                                 className="btn-secondary"

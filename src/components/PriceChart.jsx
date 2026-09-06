@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createChart, AreaSeries } from "lightweight-charts";
 import { useLivePrices } from "../hooks/useLivePrices.js";
 import { useAssetHistory } from "../hooks/useAssetHistory.js";
+import { formatPrice } from "../formatPrice.js";
 
 // Crypto history comes from Binance's public klines endpoint (generous
 // free, keyless rate limits). Stock/ETF/forex history comes from
@@ -120,9 +121,7 @@ export default function PriceChart({ symbol, name, type = "crypto", quote, onBuy
             {displayName} <span className="chart-card-symbol">{symbol}</span>
           </div>
           <div className="chart-card-price num">
-            {live?.price != null
-              ? `$${live.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-              : "Loading…"}
+            {live?.price != null ? formatPrice(live.price) : "Loading…"}
             {changePct != null && (
               <span className="chart-card-change" style={{ color: changeColor }}>
                 {changePct >= 0 ? "+" : ""}

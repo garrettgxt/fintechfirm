@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createChart, AreaSeries } from "lightweight-charts";
 import { useLivePrices } from "../hooks/useLivePrices.js";
 import { useAssetHistory } from "../hooks/useAssetHistory.js";
+import { formatPrice } from "../formatPrice.js";
 
 // Full range set, matching the reference screenshots. Crypto ranges pull
 // from Binance klines (generous free limits); stock/ETF/forex ranges pull
@@ -231,7 +232,7 @@ export default function AssetDetailPanel({
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Order failed");
         setSuccess(
-          `${side === "buy" ? "Buy" : "Sell"} limit order placed for ${quantity.toFixed(6).replace(/\.?0+$/, "")} ${symbol} at $${parseFloat(limitPrice).toFixed(2)}. It'll fill automatically while your dashboard is open, once the price crosses.`
+          `${side === "buy" ? "Buy" : "Sell"} limit order placed for ${quantity.toFixed(6).replace(/\.?0+$/, "")} ${symbol} at ${formatPrice(parseFloat(limitPrice))}. It'll fill automatically while your dashboard is open, once the price crosses.`
         );
       }
       setAmount("");
@@ -251,20 +252,20 @@ export default function AssetDetailPanel({
 
   const stats = isCrypto
     ? [
-        ["Open (24h)", cryptoStats ? `$${fmt(parseFloat(cryptoStats.openPrice), { maximumFractionDigits: 2 })}` : "—"],
-        ["High (24h)", cryptoStats ? `$${fmt(parseFloat(cryptoStats.highPrice), { maximumFractionDigits: 2 })}` : "—"],
-        ["Low (24h)", cryptoStats ? `$${fmt(parseFloat(cryptoStats.lowPrice), { maximumFractionDigits: 2 })}` : "—"],
+        ["Open (24h)", cryptoStats ? formatPrice(parseFloat(cryptoStats.openPrice)) : "—"],
+        ["High (24h)", cryptoStats ? formatPrice(parseFloat(cryptoStats.highPrice)) : "—"],
+        ["Low (24h)", cryptoStats ? formatPrice(parseFloat(cryptoStats.lowPrice)) : "—"],
         ["Volume (24h)", cryptoStats ? fmt(parseFloat(cryptoStats.volume), { maximumFractionDigits: 0 }) : "—"],
       ]
     : [
-        ["Open", quote?.open != null ? `$${fmt(quote.open, { maximumFractionDigits: 2 })}` : "—"],
-        ["Previous close", quote?.previousClose != null ? `$${fmt(quote.previousClose, { maximumFractionDigits: 2 })}` : "—"],
-        ["High", quote?.high != null ? `$${fmt(quote.high, { maximumFractionDigits: 2 })}` : "—"],
-        ["Low", quote?.low != null ? `$${fmt(quote.low, { maximumFractionDigits: 2 })}` : "—"],
+        ["Open", quote?.open != null ? formatPrice(quote.open) : "—"],
+        ["Previous close", quote?.previousClose != null ? formatPrice(quote.previousClose) : "—"],
+        ["High", quote?.high != null ? formatPrice(quote.high) : "—"],
+        ["Low", quote?.low != null ? formatPrice(quote.low) : "—"],
         ["Volume", quote?.volume != null ? fmt(quote.volume, { maximumFractionDigits: 0 }) : "—"],
         ["Average volume", quote?.avgVolume != null ? fmt(quote.avgVolume, { maximumFractionDigits: 0 }) : "—"],
-        ["52-week high", quote?.fiftyTwoWeekHigh != null ? `$${fmt(quote.fiftyTwoWeekHigh, { maximumFractionDigits: 2 })}` : "—"],
-        ["52-week low", quote?.fiftyTwoWeekLow != null ? `$${fmt(quote.fiftyTwoWeekLow, { maximumFractionDigits: 2 })}` : "—"],
+        ["52-week high", quote?.fiftyTwoWeekHigh != null ? formatPrice(quote.fiftyTwoWeekHigh) : "—"],
+        ["52-week low", quote?.fiftyTwoWeekLow != null ? formatPrice(quote.fiftyTwoWeekLow) : "—"],
         ["Exchange", quote?.exchange || "—"],
       ];
 
@@ -278,7 +279,7 @@ export default function AssetDetailPanel({
             {name} <span className="chart-card-symbol">{symbol}</span>
           </div>
           <div className="chart-card-price num" style={{ fontSize: 30, marginTop: 8 }}>
-            {price != null ? `$${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Loading…"}
+            {price != null ? formatPrice(price) : "Loading…"}
             {changePct != null && (
               <span className="chart-card-change" style={{ color: changeColor, fontSize: 15 }}>
                 {changePct >= 0 ? "+" : ""}
@@ -354,7 +355,7 @@ export default function AssetDetailPanel({
                     type="number"
                     min="0"
                     step="any"
-                    placeholder={price != null ? price.toFixed(2) : "0.00"}
+                    placeholder={price != null ? formatPrice(price).slice(1) : "0.00"}
                     value={limitPrice}
                     onChange={(e) => setLimitPrice(e.target.value)}
                     className="credit-custom-amount num"
