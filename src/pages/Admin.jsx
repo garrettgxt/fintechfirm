@@ -206,9 +206,10 @@ export default function Admin() {
 
       <h1 className="serif" style={{ fontSize: 26, marginBottom: 12 }}>Admin — Pending demo withdrawal requests</h1>
       <div style={{ fontSize: 13, color: "rgba(237,231,218,0.5)", marginBottom: 24 }}>
-        Demo Mode is fake money, but withdrawals still go through the same review step as real deposits — the
-        requested amount is already held aside from that wallet's cash balance. Approve just marks it reviewed;
-        reject refunds the amount back to their demo cash.
+        Demo Mode requests auto-approve 30 seconds after being submitted, so most of these will clear on their own —
+        this list is for overriding that (e.g. testing the rejection flow) faster than the countdown. The requested
+        amount is already held aside from that wallet's cash balance. Approve just marks it reviewed; reject refunds
+        the amount back to their demo cash.
       </div>
 
       {withdrawRequests.length === 0 ? (

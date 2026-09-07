@@ -214,6 +214,65 @@
   reloaded or another action re-triggers `refreshDemoPortfolio`; the
   "5-10 minutes" copy is scene-setting for a simulated feature, not a
   real transfer delay.
+  IMPORTANT FOLLOW-UP (2026-09-07): a real tester's screenshots surfaced
+  two more issues, fixed together:
+  1. A real bug, not cosmetic: hitting Withdraw's "Max" filled in
+     "121.99999999999999" instead of "122", and manually typing the
+     clean, DISPLAYED "122" back in then failed as "more than your cash
+     balance" — because it genuinely was. Root cause: demo_balance_usd is
+     Postgres `numeric` (exact decimal), but a trade's cost is computed
+     from a price that arrived as a JS double from a live feed (long
+     decimal expansions like 182.4300000000000068...), and that full
+     expansion got stored and compounded across trades. The UI only ever
+     *displayed* the balance rounded via toFixed(2); the stored value
+     itself could drift. Fixed in supabase/migrations/
+     20260907023336_round_demo_cash_to_cents.sql: apply_demo_trade,
+     add_demo_funds, and create_demo_withdraw_request all now
+     `round(..., 2)` every time they write demo_balance_usd, plus a
+     one-time cleanup rounding every existing wallet's balance. Cash is
+     always whole cents from here on; position quantity (shares/coins)
+     is deliberately left unrounded server-side, same as before — that's
+     not USD. WithdrawDemoFundsModal.jsx's Max button also simplified to
+     `cashUsd.toFixed(2)` now that the value behind it is always clean,
+     and its error message no longer lingers stale after the user edits
+     the amount (was showing an old "insufficient cash" error even after
+     retyping a valid figure — now cleared on every keystroke).
+  2. 30-second auto-approve, per repeated explicit request ("whenever
+     they withdraw on demo make sure it says approved after 30 seconds
+     ... pending for 30 seconds with a timer then ... approved after
+     then dismiss automatically"): get-demo-portfolio.js now flips a
+     still-'pending' request to 'approved' itself (no cron needed — same
+     reasoning as limit orders, see below) once 30+ seconds have passed
+     since it was created, any time anything re-fetches that wallet's
+     portfolio; an admin can still manually approve/reject sooner in
+     /admin (that just means this check finds it already resolved and
+     does nothing). Dashboard.jsx shows a live "Approving in Xs"
+     countdown on the pending banner (a 1s-tick effect keyed off
+     `withdrawal.id`/`.status`, purely for the ticking display — the
+     actual approval happens server-side) and calls refreshDemoPortfolio
+     once the countdown reaches zero to pick up the resolved status; an
+     "approved" banner then auto-dismisses itself 6 seconds later via
+     the same `dismissWithdrawalBanner` used for the manual Dismiss
+     button. A "rejected" banner still requires an explicit Dismiss
+     click — that's a real outcome, not a formality to rush past.
+- "Deposit" now shows a QR code too (2026-09-07), per explicit request
+  ("on demo it needs to have the QR code for cryptos to deposit that's
+  how I want it setup in demo mode as well"): AddDemoFundsModal.jsx
+  gained a currency picker and a "deposit" step matching
+  CreditInvoiceModal's real flow's shape (amount -> currency -> QR ->
+  confirm). CRITICAL SAFETY DECISION: this step deliberately does NOT
+  import WALLET_ADDRESSES (the real fixed Site Credit deposit addresses)
+  — showing a REAL address inside a "demo" flow would risk an actual
+  user sending real crypto to it while believing it's just a simulation,
+  and this flow never checks any blockchain either way, so it would
+  never get credited or refunded. The QR/address shown is an obviously
+  fake, clearly-labeled string (`DEMO-<SYMBOL>-NO-REAL-FUNDS-NEEDED`),
+  and the copy explicitly says nothing is actually sent anywhere.
+  Confirming still just calls add-demo-funds directly (instant,
+  self-service, no admin review) — only the visual shape changed, not
+  the underlying instant-credit behavior. If ever asked to make this
+  look "more real" (e.g. a believable-looking address), the constraint
+  above still applies: it must never be a REAL, fund-receiving address.
 - AssetDetailPanel.jsx's Buy/Sell panel no longer displays "Demo cash:
   $X" — user feedback was that this is redundant once the account is
   already known to be in Demo Mode (shown elsewhere via the "Demo" badge

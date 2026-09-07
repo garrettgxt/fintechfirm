@@ -110,6 +110,39 @@ export default function Dashboard() {
 
   useEffect(refreshDemoPortfolio, [walletAddress]);
 
+  // A pending withdrawal auto-approves 30s after it's created (see
+  // AUTO_APPROVE_MS in get-demo-portfolio.js — that function does the
+  // actual flip; this just re-fetches once the countdown reaches zero so
+  // the just-approved status shows up). `nowTick` re-renders every second
+  // while pending so the banner's "Xs" countdown actually counts down.
+  const [nowTick, setNowTick] = useState(Date.now());
+  useEffect(() => {
+    if (withdrawal?.status !== "pending") return;
+    const interval = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [withdrawal?.id, withdrawal?.status]);
+
+  const withdrawalRemainingMs = withdrawal?.status === "pending"
+    ? Math.max(0, 30_000 - (nowTick - new Date(withdrawal.createdAt).getTime()))
+    : 0;
+
+  useEffect(() => {
+    if (withdrawal?.status !== "pending" || withdrawalRemainingMs > 0) return;
+    refreshDemoPortfolio();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [withdrawal?.status, withdrawalRemainingMs]);
+
+  // Once it's resolved, auto-dismiss an "approved" banner after a few
+  // seconds so it doesn't just sit there forever — rejected still needs
+  // an explicit Dismiss click, since that's a real outcome worth making
+  // sure the user actually saw.
+  useEffect(() => {
+    if (withdrawal?.status !== "approved" || String(withdrawal.id) === dismissedWithdrawalId) return;
+    const timeout = setTimeout(() => dismissWithdrawalBanner(), 6000);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [withdrawal?.id, withdrawal?.status, dismissedWithdrawalId]);
+
   // Site-credit balance (custodial — see functions/admin-review-deposit.js,
   // the only place it's ever incremented now that NOWPayments is gone).
   // Separate from Demo Mode on purpose: one is real money Coinstate
@@ -406,14 +439,16 @@ export default function Dashboard() {
                       <>${Number(withdrawal.amountUsd).toFixed(2)} was rejected and returned to your cash balance.</>
                     ) : (
                       <>
-                        ${Number(withdrawal.amountUsd).toFixed(2)} requested {new Date(withdrawal.createdAt).toLocaleString()} — awaiting
-                        admin approval, held out of your available cash until then.
+                        ${Number(withdrawal.amountUsd).toFixed(2)} requested — held out of your available cash while it's
+                        reviewed.
                       </>
                     )}
                   </div>
                 </div>
                 {withdrawal.status === "pending" ? (
-                  <span className="status-pill pending">Pending</span>
+                  <span className="status-pill pending">
+                    Approving in {Math.ceil(withdrawalRemainingMs / 1000)}s
+                  </span>
                 ) : (
                   <button className="btn-secondary" style={{ padding: "6px 14px", fontSize: 12.5 }} onClick={dismissWithdrawalBanner}>
                     Dismiss

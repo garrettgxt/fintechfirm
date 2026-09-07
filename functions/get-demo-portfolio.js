@@ -1,12 +1,19 @@
 // Cloudflare Pages Function: returns a wallet's demo cash balance, demo
 // positions, and its most recent withdrawal request of ANY status (see
-// create-demo-withdraw-request.js — withdrawals need admin approval).
-// Not just the pending one: once an admin reviews it, the Dashboard
-// still needs to show the outcome (an "approved" or "rejected" banner)
-// rather than the request just silently vanishing. The frontend computes
-// current market value itself from quotes it already has (live crypto
-// prices / polled stock-forex quotes) rather than this function fetching
-// prices too — avoids duplicate calls.
+// create-demo-withdraw-request.js). Not just the pending one: once it's
+// resolved, the Dashboard still needs to show the outcome (an "approved"
+// or "rejected" banner) rather than the request just silently vanishing.
+//
+// AUTO-APPROVAL: a Demo Mode withdrawal that's still 'pending' 30+
+// seconds after it was created is flipped to 'approved' right here (no
+// background job needed — Cloudflare Pages has no cron anyway, same
+// constraint as limit orders, see CLAUDE.md) the next time anything
+// fetches this wallet's portfolio. An admin can still manually
+// approve/reject sooner via /admin — that just means this check finds
+// the row already resolved and does nothing. The amount was already
+// escrowed out of demo_balance_usd when the request was created, so
+// approval (auto or manual) never touches the balance again.
+const AUTO_APPROVE_MS = 30_000;
 
 export async function onRequest(context) {
   const url = new URL(context.request.url);
@@ -43,8 +50,26 @@ export async function onRequest(context) {
 
     const overrideRows = await overrideRes.json();
     const positions = await positionsRes.json();
-    const [withdrawRow] = await withdrawRes.json();
+    let [withdrawRow] = await withdrawRes.json();
     const wallet = overrideRows[0];
+
+    if (withdrawRow?.status === "pending" && Date.now() - new Date(withdrawRow.created_at).getTime() >= AUTO_APPROVE_MS) {
+      const reviewedAt = new Date().toISOString();
+      const patchRes = await fetch(`${supabaseUrl}/rest/v1/demo_withdraw_requests?id=eq.${withdrawRow.id}&status=eq.pending`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: serviceKey,
+          Authorization: `Bearer ${serviceKey}`,
+          Prefer: "return=representation",
+        },
+        body: JSON.stringify({ status: "approved", reviewed_at: reviewedAt }),
+      });
+      if (patchRes.ok) {
+        const [updated] = await patchRes.json();
+        if (updated) withdrawRow = updated;
+      }
+    }
 
     return new Response(
       JSON.stringify({

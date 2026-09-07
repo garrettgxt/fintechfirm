@@ -1,12 +1,13 @@
 import { useState } from "react";
 
 // Demo Mode "Withdraw" — unlike AddDemoFundsModal (instant self-service
-// top-up), this submits a request that sits pending until an admin
-// approves or rejects it in /admin, same review pattern as real Site
-// Credit deposits — explicit user request, even though it's fake money.
-// The amount is escrowed server-side the moment the request is created
-// (see create-demo-withdraw-request.js), so cashUsd here already reflects
-// the pre-withdrawal balance the Max button should offer.
+// top-up), this submits a request that shows as pending (with a 30-
+// second countdown on the Portfolio tab, see Dashboard.jsx) and either
+// auto-approves after that or gets reviewed/overridden manually in
+// /admin — explicit user request, even though it's fake money. The
+// amount is escrowed server-side the moment the request is created (see
+// create-demo-withdraw-request.js), so cashUsd here already reflects the
+// pre-withdrawal balance the Max button should offer.
 export default function WithdrawDemoFundsModal({ walletAddress, cashUsd, onClose, onRequested }) {
   const [customAmount, setCustomAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -15,6 +16,11 @@ export default function WithdrawDemoFundsModal({ walletAddress, cashUsd, onClose
 
   const effectiveAmount = parseFloat(customAmount);
   const isValid = Number.isFinite(effectiveAmount) && effectiveAmount > 0 && effectiveAmount <= cashUsd;
+
+  function updateAmount(value) {
+    setCustomAmount(value);
+    if (error) setError("");
+  }
 
   async function submit() {
     if (!isValid) return;
@@ -62,8 +68,8 @@ export default function WithdrawDemoFundsModal({ walletAddress, cashUsd, onClose
             <div style={{ fontSize: 32, marginBottom: 8 }}>✓</div>
             <div className="serif" style={{ fontSize: 18, marginBottom: 6 }}>Submitted</div>
             <div style={{ fontSize: 13, color: "rgba(237,231,218,0.6)" }}>
-              ${effectiveAmount.toFixed(2)} is on hold and awaiting admin approval. You'll see it as pending on your
-              Portfolio tab until it's reviewed.
+              ${effectiveAmount.toFixed(2)} is on hold. You'll see it counting down on your Portfolio tab and it'll
+              show as approved shortly.
             </div>
             <button className="btn-secondary" style={{ width: "100%", marginTop: 20 }} onClick={onClose}>
               Close
@@ -72,8 +78,8 @@ export default function WithdrawDemoFundsModal({ walletAddress, cashUsd, onClose
         ) : (
           <>
             <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.55)", marginBottom: 20 }}>
-              Withdrawal requests are reviewed and approved manually, same as deposits. The amount is held aside from
-              your available cash until then.
+              Withdrawal requests are held for a short review window before approving automatically. The amount is
+              held aside from your available cash until then.
             </div>
 
             <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
@@ -83,14 +89,14 @@ export default function WithdrawDemoFundsModal({ walletAddress, cashUsd, onClose
                 step="any"
                 placeholder="Amount in USD"
                 value={customAmount}
-                onChange={(e) => setCustomAmount(e.target.value)}
+                onChange={(e) => updateAmount(e.target.value)}
                 className="credit-custom-amount num"
                 style={{ flex: 1, marginBottom: 0 }}
               />
               <button
                 type="button"
                 className="credit-chip"
-                onClick={() => setCustomAmount(String(cashUsd))}
+                onClick={() => updateAmount(cashUsd.toFixed(2))}
                 disabled={!(cashUsd > 0)}
                 title="Withdraw all available cash"
               >
@@ -110,7 +116,9 @@ export default function WithdrawDemoFundsModal({ walletAddress, cashUsd, onClose
               onClick={submit}
               disabled={submitting || !isValid}
             >
-              {submitting ? "Submitting…" : `Withdraw $${isValid ? effectiveAmount.toLocaleString() : "0"}`}
+              {submitting
+                ? "Submitting…"
+                : `Withdraw $${Number.isFinite(effectiveAmount) ? effectiveAmount.toLocaleString() : "0"}`}
             </button>
           </>
         )}
