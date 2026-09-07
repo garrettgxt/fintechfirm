@@ -270,9 +270,22 @@
   and the copy explicitly says nothing is actually sent anywhere.
   Confirming still just calls add-demo-funds directly (instant,
   self-service, no admin review) — only the visual shape changed, not
-  the underlying instant-credit behavior. If ever asked to make this
-  look "more real" (e.g. a believable-looking address), the constraint
-  above still applies: it must never be a REAL, fund-receiving address.
+  the underlying instant-credit behavior.
+  REVERSED, same day: the user was told the above tradeoff explicitly
+  and asked for the real addresses anyway ("please remove this, and put
+  the ETH address and all the addresses ive provided previously") — so
+  AddDemoFundsModal.jsx now imports WALLET_ADDRESSES and shows the SAME
+  real fixed deposit address CreditInvoiceModal uses (with a Copy
+  button, matching that modal). This is a knowingly-accepted risk, not
+  an oversight: if someone actually sends real crypto to that address
+  while in Demo Mode, nothing links it back to them or credits it —
+  this flow still never checks a blockchain, it just instantly credits
+  fake demo cash regardless of what (if anything) was actually sent.
+  The copy under the QR still says this explicitly ("Demo cash isn't
+  tied to a real payment") so a demo user isn't misled into thinking
+  they need to pay. If this question comes up again, the tradeoff is
+  the same as before — flag it, but the user has already made this call
+  once.
 - AssetDetailPanel.jsx's Buy/Sell panel no longer displays "Demo cash:
   $X" — user feedback was that this is redundant once the account is
   already known to be in Demo Mode (shown elsewhere via the "Demo" badge

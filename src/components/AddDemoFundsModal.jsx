@@ -1,20 +1,22 @@
 import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { SUPPORTED_CURRENCIES } from "../walletAddresses.js";
+import { WALLET_ADDRESSES, SUPPORTED_CURRENCIES } from "../walletAddresses.js";
 
 const PRESET_AMOUNTS = [500, 1000, 5000, 10000];
 
-// Self-service Demo Mode cash top-up — fake money, no real payment ever
-// happens. Walks through the same visual shape as CreditInvoiceModal's
-// real crypto-QR deposit flow (amount -> currency -> QR/address ->
-// confirm) per explicit user request ("needs to have the QR code for
-// cryptos to deposit... that's how I want it setup in demo mode"), but
-// deliberately does NOT import WALLET_ADDRESSES (the real fixed deposit
-// addresses) — reusing a REAL address here would risk a demo user
-// actually sending real crypto to it while believing they're only in a
-// simulation, since this flow never checks a blockchain either way.
-// Instead the "address" and QR are obviously fake and clearly labeled;
-// confirming just calls add-demo-funds directly, same as before.
+// Self-service Demo Mode cash top-up. Walks through the same visual shape
+// as CreditInvoiceModal's real crypto-QR deposit flow (amount -> currency
+// -> QR/address -> confirm) per explicit user request. This step shows
+// the SAME REAL fixed deposit addresses CreditInvoiceModal uses — an
+// earlier version deliberately used an obviously-fake placeholder address
+// instead, specifically to avoid a demo user mistaking this for a real
+// deposit step and actually sending crypto here (this flow never checks
+// a blockchain either way, so it wouldn't get credited or refunded) —
+// the user was told that tradeoff explicitly and asked for the real
+// addresses anyway, so that risk is accepted, not overlooked. Confirming
+// still just calls add-demo-funds directly (instant, self-service,
+// unrelated to whether anything was actually sent) — only the address
+// shown changed, not the underlying behavior.
 export default function AddDemoFundsModal({ walletAddress, onClose, onAdded }) {
   const [step, setStep] = useState("choose"); // choose | deposit | done
   const [amount, setAmount] = useState(1000);
@@ -22,11 +24,18 @@ export default function AddDemoFundsModal({ walletAddress, onClose, onAdded }) {
   const [currency, setCurrency] = useState("eth");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const effectiveAmount = customAmount ? parseFloat(customAmount) : amount;
   const isValid = Number.isFinite(effectiveAmount) && effectiveAmount > 0;
   const coin = SUPPORTED_CURRENCIES.find((c) => c.code === currency) || SUPPORTED_CURRENCIES[0];
-  const demoAddress = `DEMO-${coin.symbol}-NO-REAL-FUNDS-NEEDED`;
+  const payAddress = WALLET_ADDRESSES[currency];
+
+  function copyAddress() {
+    navigator.clipboard.writeText(payAddress).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
 
   async function submit() {
     if (!isValid) return;
@@ -134,25 +143,28 @@ export default function AddDemoFundsModal({ walletAddress, onClose, onAdded }) {
             </div>
 
             <div className="credit-qr">
-              <QRCodeSVG value={demoAddress} size={200} bgColor="#EDE7DA" fgColor="#0F1D1B" />
+              <QRCodeSVG value={payAddress} size={200} bgColor="#EDE7DA" fgColor="#0F1D1B" />
             </div>
 
             <div className="credit-field">
               <div style={{ minWidth: 0 }}>
-                <div className="credit-field-label">DEMO ADDRESS — NOT REAL</div>
-                <div className="num" style={{ fontSize: 12.5, wordBreak: "break-all" }}>{demoAddress}</div>
+                <div className="credit-field-label">TO ADDRESS</div>
+                <div className="num" style={{ fontSize: 12.5, wordBreak: "break-all" }}>{payAddress}</div>
               </div>
+              <button className="btn-secondary" onClick={copyAddress}>
+                {copied ? "Copied" : "Copy"}
+              </button>
             </div>
 
             <div style={{ fontSize: 11.5, color: "rgba(237,231,218,0.4)", margin: "12px 0 20px" }}>
-              This is a simulated deposit — nothing is actually sent anywhere. Confirming below adds the amount to
-              your demo cash balance immediately, no real {coin.label} required.
+              This is Coinstate Capital's real {coin.label} deposit address. Demo cash isn't tied to a real payment
+              though — confirming below adds the amount to your demo balance immediately either way.
             </div>
 
             {error && <div style={{ fontSize: 12.5, color: "var(--rust)", marginBottom: 12 }}>{error}</div>}
 
             <button className="btn-primary" style={{ width: "100%" }} onClick={submit} disabled={submitting}>
-              {submitting ? "Depositing…" : `Simulate payment — deposit $${effectiveAmount.toLocaleString()}`}
+              {submitting ? "Depositing…" : `Deposit $${effectiveAmount.toLocaleString()}`}
             </button>
             <button className="btn-secondary" style={{ width: "100%", marginTop: 10 }} onClick={() => setStep("choose")}>
               Back
