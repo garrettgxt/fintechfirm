@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+const STORAGE_KEY = "adminPassword";
 
 // Block explorer links per currency, for verifying a submitted tx_hash
 // before approving a deposit request — see CLAUDE.md's Site Credit
@@ -21,13 +23,33 @@ function explorerUrl(currency, txHash) {
 }
 
 export default function Admin() {
-  const [password, setPassword] = useState("");
+  // Persist the password across a refresh (see loadWallets below, which
+  // saves/clears it on success/failure) — previously this was plain
+  // useState("") with nothing backing it, so every reload dropped back
+  // to the password prompt even though the session was otherwise fine.
+  // localStorage rather than sessionStorage on purpose: the ask was "stop
+  // logging me out on every refresh", and a browser restart shouldn't
+  // require re-entering it either. Explicit Logout button below clears it.
+  const [password, setPassword] = useState(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY) || "";
+    } catch {
+      return "";
+    }
+  });
   const [authed, setAuthed] = useState(false);
   const [wallets, setWallets] = useState([]);
   const [depositRequests, setDepositRequests] = useState([]);
   const [withdrawRequests, setWithdrawRequests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Silently re-auth on mount if a password was already saved, instead of
+  // making the admin retype it after every reload.
+  useEffect(() => {
+    if (password) loadWallets(password);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function loadWallets(pwd) {
     setLoading(true);
@@ -40,10 +62,16 @@ export default function Admin() {
       if (!res.ok) {
         setError(data.error || "Failed to load");
         setAuthed(false);
+        try {
+          localStorage.removeItem(STORAGE_KEY);
+        } catch {}
         return;
       }
       setWallets(data.wallets);
       setAuthed(true);
+      try {
+        localStorage.setItem(STORAGE_KEY, pwd);
+      } catch {}
       loadDepositRequests(pwd);
       loadWithdrawRequests(pwd);
     } catch (e) {
@@ -51,6 +79,14 @@ export default function Admin() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function logout() {
+    setAuthed(false);
+    setPassword("");
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {}
   }
 
   async function loadDepositRequests(pwd) {
@@ -149,6 +185,9 @@ export default function Admin() {
 
   return (
     <div style={{ padding: 40, maxWidth: 900, margin: "0 auto" }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+        <button className="btn-secondary" onClick={logout}>Log out</button>
+      </div>
       <h1 className="serif" style={{ fontSize: 26, marginBottom: 12 }}>Admin — Pending deposit requests</h1>
       <div style={{ fontSize: 13, color: "rgba(237,231,218,0.5)", marginBottom: 24 }}>
         Site Credit deposits go to the fixed addresses in src/walletAddresses.js — there's no

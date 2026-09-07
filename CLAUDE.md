@@ -86,7 +86,16 @@
   hit the same block; CoinGecko/Coinbase's REST APIs weren't tested for
   the same issue and may or may not have it too.
 - Admin panel at /admin (password-gated via ADMIN_PASSWORD, not linked in
-  site nav) now just toggles demo_mode and sets the demo cash balance
+  site nav). Admin.jsx persists that password to `localStorage`
+  (`adminPassword`, 2026-09-07) once it successfully authenticates, and
+  silently re-tries it on mount — previously the password only lived in
+  React state, so every page reload dropped back to the login prompt even
+  mid-session; explicit user complaint ("Everytime I refresh the admin
+  panel it logs me out"). Cleared automatically if a stored password ever
+  gets rejected (e.g. ADMIN_PASSWORD was rotated), and via the new Logout
+  button otherwise — added specifically because persisting login makes an
+  explicit way to end the session necessary on a shared machine. Now just
+  toggles demo_mode and sets the demo cash balance
   (`wallet_overrides.demo_balance_usd`, repurposed — see below), plus a
   "Reset portfolio" button (functions/admin-reset-demo.js) that clears
   `demo_positions` for that wallet. The old per-wallet single-asset
