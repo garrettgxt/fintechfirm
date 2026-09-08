@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { WALLET_ADDRESSES, SUPPORTED_CURRENCIES } from "../walletAddresses.js";
+import { formatUsd } from "../utils/formatCurrency.js";
 
 const PRESET_AMOUNTS = [500, 1000, 5000, 10000];
 
@@ -139,7 +140,7 @@ export default function AddDemoFundsModal({ walletAddress, onClose, onAdded }) {
             </div>
 
             <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.55)", marginBottom: 20 }}>
-              ${effectiveAmount.toFixed(2)} of demo cash
+              {formatUsd(effectiveAmount)} of demo cash
             </div>
 
             <div className="credit-qr">
@@ -164,7 +165,7 @@ export default function AddDemoFundsModal({ walletAddress, onClose, onAdded }) {
             {error && <div style={{ fontSize: 12.5, color: "var(--rust)", marginBottom: 12 }}>{error}</div>}
 
             <button className="btn-primary" style={{ width: "100%" }} onClick={submit} disabled={submitting}>
-              {submitting ? "Depositing…" : `Deposit $${effectiveAmount.toLocaleString()}`}
+              {submitting ? "Depositing…" : `Deposit ${formatUsd(effectiveAmount)}`}
             </button>
             <button className="btn-secondary" style={{ width: "100%", marginTop: 10 }} onClick={() => setStep("choose")}>
               Back
@@ -177,7 +178,7 @@ export default function AddDemoFundsModal({ walletAddress, onClose, onAdded }) {
             <div style={{ fontSize: 32, marginBottom: 8 }}>✓</div>
             <div className="serif" style={{ fontSize: 18, marginBottom: 6 }}>Deposited</div>
             <div style={{ fontSize: 13, color: "rgba(237,231,218,0.6)" }}>
-              ${effectiveAmount.toFixed(2)} added to your cash balance.
+              {formatUsd(effectiveAmount)} added to your cash balance.
             </div>
             <button className="btn-secondary" style={{ width: "100%", marginTop: 20 }} onClick={onClose}>
               Close

@@ -3,6 +3,7 @@ import { createChart, AreaSeries } from "lightweight-charts";
 import { useLivePrices } from "../hooks/useLivePrices.js";
 import { useAssetHistory } from "../hooks/useAssetHistory.js";
 import { formatPrice } from "../formatPrice.js";
+import { formatUsd } from "../utils/formatCurrency.js";
 import { TV_SYMBOLS } from "../assetCatalog.js";
 import TradingViewWidget from "./TradingViewWidget.jsx";
 
@@ -519,7 +520,7 @@ export default function AssetDetailPanel({
                   {buyIn === "dollars" ? (
                     <>≈ {quantity.toFixed(6).replace(/\.?0+$/, "")} {symbol}</>
                   ) : (
-                    <>Estimated {side === "buy" ? "cost" : "proceeds"}: <strong>${estimatedCost?.toFixed(2)}</strong></>
+                    <>Estimated {side === "buy" ? "cost" : "proceeds"}: <strong>{estimatedCost != null ? formatUsd(estimatedCost) : ""}</strong></>
                   )}
                 </div>
               )}

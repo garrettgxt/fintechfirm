@@ -12,6 +12,7 @@ import AssetSearch from "../components/AssetSearch.jsx";
 import AssetDetailPanel from "../components/AssetDetailPanel.jsx";
 import { consumePendingAsset } from "../pendingAsset.js";
 import { formatPrice } from "../formatPrice.js";
+import { formatUsd } from "../utils/formatCurrency.js";
 
 export default function Dashboard() {
   const { user, logout } = usePrivy();
@@ -382,10 +383,10 @@ export default function Dashboard() {
               <div>
                 <div className="balance-label">Total portfolio value</div>
                 <div className="balance-amount num" style={{ display: "flex", alignItems: "baseline" }}>
-                  {`$${displayedUsdValue.toFixed(2)}`}
+                  {formatUsd(displayedUsdValue)}
                   {balanceDelta && (
                     <span className={`balance-delta ${balanceDelta.direction}`}>
-                      {balanceDelta.direction === "up" ? "+" : "-"}${Math.abs(balanceDelta.amount).toFixed(2)}
+                      {balanceDelta.direction === "up" ? "+" : "-"}{formatUsd(Math.abs(balanceDelta.amount))}
                     </span>
                   )}
                 </div>
@@ -434,12 +435,12 @@ export default function Dashboard() {
                   </div>
                   <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.6)" }}>
                     {withdrawal.status === "approved" ? (
-                      <>${Number(withdrawal.amountUsd).toFixed(2)} approved — it should show up in your wallet within 5–10 minutes.</>
+                      <>{formatUsd(withdrawal.amountUsd)} approved — it should show up in your wallet within 5–10 minutes.</>
                     ) : withdrawal.status === "rejected" ? (
-                      <>${Number(withdrawal.amountUsd).toFixed(2)} was rejected and returned to your cash balance.</>
+                      <>{formatUsd(withdrawal.amountUsd)} was rejected and returned to your cash balance.</>
                     ) : (
                       <>
-                        ${Number(withdrawal.amountUsd).toFixed(2)} requested — held out of your available cash while it's
+                        {formatUsd(withdrawal.amountUsd)} requested — held out of your available cash while it's
                         reviewed.
                       </>
                     )}
@@ -461,7 +462,7 @@ export default function Dashboard() {
               <>
                 <div className="panel">
                   <span className="status-pill healthy">Ready to trade</span>
-                  <div className="wallet-address num">${demoCashUsd.toFixed(2)}</div>
+                  <div className="wallet-address num">{formatUsd(demoCashUsd)}</div>
                 </div>
 
                 <div className="holdings-panel">
@@ -497,14 +498,14 @@ export default function Dashboard() {
                               <td style={{ padding: "16px 28px", borderTop: "1px solid var(--line)", textAlign: "right" }} className="num">
                                 <div>{p.quantity} {p.symbol}</div>
                                 <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)" }}>
-                                  {value != null ? `$${value.toFixed(2)}` : "Loading…"}
+                                  {value != null ? formatUsd(value) : "Loading…"}
                                 </div>
                                 {pnlPct != null && (
                                   <div
                                     className="holdings-row-change"
                                     style={{ color: pnl >= 0 ? "var(--sage)" : "var(--rust)" }}
                                   >
-                                    {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)} ({pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%)
+                                    {pnl >= 0 ? "+" : ""}{formatUsd(pnl)} ({pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%)
                                   </div>
                                 )}
                                 <button

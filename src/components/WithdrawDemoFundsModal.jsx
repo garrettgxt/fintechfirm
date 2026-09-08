@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatUsd } from "../utils/formatCurrency.js";
 
 // Demo Mode "Withdraw" — unlike AddDemoFundsModal (instant self-service
 // top-up), this submits a request that shows as pending (with a 30-
@@ -68,7 +69,7 @@ export default function WithdrawDemoFundsModal({ walletAddress, cashUsd, onClose
             <div style={{ fontSize: 32, marginBottom: 8 }}>✓</div>
             <div className="serif" style={{ fontSize: 18, marginBottom: 6 }}>Submitted</div>
             <div style={{ fontSize: 13, color: "rgba(237,231,218,0.6)" }}>
-              ${effectiveAmount.toFixed(2)} is on hold. You'll see it counting down on your Portfolio tab and it'll
+              {formatUsd(effectiveAmount)} is on hold. You'll see it counting down on your Portfolio tab and it'll
               show as approved shortly.
             </div>
             <button className="btn-secondary" style={{ width: "100%", marginTop: 20 }} onClick={onClose}>
@@ -105,7 +106,7 @@ export default function WithdrawDemoFundsModal({ walletAddress, cashUsd, onClose
             </div>
 
             <div style={{ fontSize: 12, color: "rgba(237,231,218,0.45)", marginBottom: 16 }}>
-              Available: ${cashUsd.toFixed(2)}
+              Available: {formatUsd(cashUsd)}
             </div>
 
             {error && <div style={{ fontSize: 12.5, color: "var(--rust)", marginBottom: 12 }}>{error}</div>}

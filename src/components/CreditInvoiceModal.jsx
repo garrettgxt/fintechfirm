@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { WALLET_ADDRESSES, SUPPORTED_CURRENCIES } from "../walletAddresses.js";
+import { formatUsd } from "../utils/formatCurrency.js";
 
 const PRESET_AMOUNTS = [20, 50, 100, 250, 500, 1000];
 
@@ -86,7 +87,7 @@ export default function CreditInvoiceModal({ walletAddress, initialCurrency, onC
                   }}
                   className={`credit-chip ${customAmount === "" && amount === a ? "active" : ""}`}
                 >
-                  ${a}
+                  ${a.toLocaleString()}
                 </button>
               ))}
             </div>
@@ -125,7 +126,7 @@ export default function CreditInvoiceModal({ walletAddress, initialCurrency, onC
               onClick={() => setStep("deposit")}
               disabled={!(amount > 0) || !payAddress}
             >
-              Continue with ${amount.toFixed(2)}
+              Continue with {formatUsd(amount)}
             </button>
           </>
         )}
@@ -138,7 +139,7 @@ export default function CreditInvoiceModal({ walletAddress, initialCurrency, onC
             </div>
 
             <div style={{ fontSize: 12.5, color: "rgba(237,231,218,0.55)", marginBottom: 20 }}>
-              ${amount.toFixed(2)} of Coinstate credit
+              {formatUsd(amount)} of Coinstate credit
             </div>
 
             <div className="credit-qr">
@@ -187,7 +188,7 @@ export default function CreditInvoiceModal({ walletAddress, initialCurrency, onC
             <div style={{ fontSize: 32, marginBottom: 8 }}>✓</div>
             <div className="serif" style={{ fontSize: 18, marginBottom: 6 }}>Submitted for review</div>
             <div style={{ fontSize: 13, color: "rgba(237,231,218,0.6)" }}>
-              We'll verify your ${amount.toFixed(2)} {coinLabel} payment and add it to your balance shortly.
+              We'll verify your {formatUsd(amount)} {coinLabel} payment and add it to your balance shortly.
             </div>
             <button className="btn-secondary" style={{ width: "100%", marginTop: 20 }} onClick={onClose}>
               Back to wallet

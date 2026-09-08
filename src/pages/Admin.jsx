@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { formatUsd } from "../utils/formatCurrency.js";
 
 const STORAGE_KEY = "adminPassword";
 
@@ -206,7 +207,7 @@ export default function Admin() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
                 <div>
                   <div className="num" style={{ fontSize: 15, fontWeight: 600 }}>
-                    ${Number(r.amount_usd).toFixed(2)} — {r.currency.toUpperCase()}
+                    {formatUsd(r.amount_usd)} — {r.currency.toUpperCase()}
                   </div>
                   <div className="num" style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)", marginTop: 4 }}>
                     {r.wallet_address}
@@ -262,7 +263,7 @@ export default function Admin() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
                 <div>
                   <div className="num" style={{ fontSize: 15, fontWeight: 600 }}>
-                    ${Number(r.amount_usd).toFixed(2)} — demo cash
+                    {formatUsd(r.amount_usd)} — demo cash
                   </div>
                   <div className="num" style={{ fontSize: 12.5, color: "rgba(237,231,218,0.5)", marginTop: 4 }}>
                     {r.wallet_address}
